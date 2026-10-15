@@ -32,22 +32,36 @@
   function apply(){
     document.querySelectorAll("select").forEach(select=>{
       if(!/branch|филиал|производ/i.test(`${select.id} ${select.name||""} ${select.previousElementSibling?.textContent||""}`))return;
-      [...select.options].forEach(o=>{const pretty=MAP[String(o.value||o.textContent).trim().toLocaleUpperCase("ru-RU")];if(pretty)o.textContent=pretty});
+      [...select.options].forEach(o=>{
+        const pretty=MAP[String(o.value||o.textContent).trim().toLocaleUpperCase("ru-RU")];
+        if(pretty&&o.textContent!==pretty)o.textContent=pretty;
+      });
     });
-    const bn=document.getElementById("bn");if(bn){const pretty=MAP[bn.textContent.trim().toLocaleUpperCase("ru-RU")];if(pretty)bn.textContent=pretty}
+    const bn=document.getElementById("bn");
+    if(bn){const pretty=MAP[bn.textContent.trim().toLocaleUpperCase("ru-RU")];if(pretty&&bn.textContent!==pretty)bn.textContent=pretty}
     document.querySelectorAll(".card .title,.history-head b,.date-request b").forEach(el=>{
       const parts=el.textContent.split(" · ");
       const pretty=MAP[String(parts[0]||"").trim().toLocaleUpperCase("ru-RU")];
-      if(pretty){parts[0]=pretty;el.textContent=parts.join(" · ")}
+      if(pretty){parts[0]=pretty;const next=parts.join(" · ");if(next!==el.textContent)el.textContent=next}
     });
     const mt=document.getElementById("mt");
     if(mt){
       const parts=mt.textContent.split(" · ");let changed=false;
-      for(let i=0;i<parts.length;i++){const pretty=MAP[String(parts[i]||"").trim().toLocaleUpperCase("ru-RU")];if(pretty){parts[i]=pretty;changed=true}}
+      for(let i=0;i<parts.length;i++){
+        const pretty=MAP[String(parts[i]||"").trim().toLocaleUpperCase("ru-RU")];
+        if(pretty&&parts[i]!==pretty){parts[i]=pretty;changed=true}
+      }
       if(changed)mt.textContent=parts.join(" · ");
     }
     adminTerms();
   }
+  let scheduled=false;
+  function scheduleApply(){
+    if(scheduled)return;
+    scheduled=true;
+    requestAnimationFrame(()=>{scheduled=false;apply()});
+  }
   window.PRO_OPTIMA_BRANCH_LABEL=label;
-  apply();new MutationObserver(apply).observe(document.body,{childList:true,subtree:true});
+  apply();
+  new MutationObserver(scheduleApply).observe(document.body,{childList:true,subtree:true});
 })();
