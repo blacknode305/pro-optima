@@ -15,6 +15,13 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
   document.head.appendChild(link);
 
   if(page==="admin.html"){
+    const adminTheme=document.createElement("link");
+    adminTheme.rel="stylesheet";
+    adminTheme.href="admin-theme-overhaul.css?v=20261015-1";
+    document.head.appendChild(adminTheme);
+  }
+
+  if(page==="admin.html"){
     window.addEventListener("DOMContentLoaded",()=>{
       const row=document.querySelector(".header-row");
       if(row&&!row.querySelector(".po-role-switch")){
@@ -52,6 +59,10 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       const updateSafety=document.createElement("script");
       updateSafety.src="admin-update-safety.js?v=20261015-1";
       document.body.appendChild(updateSafety);
+      const uiOverhaul=document.createElement("script");
+      uiOverhaul.src="admin-ui-overhaul.js?v=20261015-1";
+      uiOverhaul.async=false;
+      document.body.appendChild(uiOverhaul);
     }
     if(page==="operator.html"){
       const dispatcherAuth=document.createElement("script");
@@ -63,6 +74,10 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       dateAccess.src="form-date-native.js?v=20261015-2";
       document.body.appendChild(dateAccess);
     }
+    const branchDisplay=document.createElement("script");
+    branchDisplay.src="branch-display.js?v=20261015-1";
+    branchDisplay.async=false;
+    document.body.appendChild(branchDisplay);
     const realtime=document.createElement("script");
     realtime.src="realtime.js?v=20261015-1";
     document.body.appendChild(realtime);
