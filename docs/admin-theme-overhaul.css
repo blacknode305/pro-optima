@@ -1,0 +1,92 @@
+/* PRO OPTIMA admin UI overhaul: supplier schedules, stable inputs, dark theme */
+.page-admin .clear-btn{display:none!important}
+.page-admin .clear-wrap{display:contents!important}
+.page-admin .clear-wrap>input{padding-right:10px!important}
+
+.page-admin .po-schedule-title{margin:14px 0 4px;font-size:13px;font-weight:800;color:var(--po-text)}
+.page-admin .po-schedule-help{margin:0 0 10px}
+.page-admin .po-schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 12px}
+.page-admin .po-schedule{border:1px solid var(--po-line);border-radius:12px;background:var(--po-surface-soft);padding:11px;transition:opacity .15s ease,border-color .15s ease,background .15s ease}
+.page-admin .po-schedule.is-disabled{opacity:.58;background:transparent}
+.page-admin .po-schedule-head{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:9px}
+.page-admin .po-schedule-enable{display:flex!important;align-items:center;gap:7px;margin:0!important;font-size:13px!important;font-weight:800!important;color:var(--po-text)!important;cursor:pointer}
+.page-admin .po-schedule-enable input{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;padding:0!important}
+.page-admin .po-branch-input{max-width:220px}
+.page-admin .po-schedule-days{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.page-admin .po-schedule-days label,.page-admin .po-schedule-note label{margin:0 0 5px!important}
+.page-admin .po-day-picker{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.page-admin .po-day{min-width:0!important;min-height:32px!important;padding:4px 2px!important;border-radius:7px!important;font-size:11px!important;font-weight:750!important;transform:none!important}
+.page-admin .po-day:hover,.page-admin .po-day:active{transform:none!important}
+.page-admin .po-day.active{background:var(--po-green)!important;border-color:#3e815b!important;color:#fff!important}
+.page-admin .po-schedule-note{margin-top:9px}
+.page-admin .po-schedule-note input{width:100%}
+
+/* Dark mode must win over legacy inline and shared !important rules. */
+html[data-theme="dark"].page-admin{
+  color-scheme:dark;
+  --po-bg:#0b1014;
+  --po-surface:#131a1f;
+  --po-surface-soft:#182127;
+  --po-line:#2a3942;
+  --po-text:#e8eef1;
+  --po-muted:#8fa0aa;
+  --po-blue:#6c9fc4;
+  --po-blue-soft:#172a37;
+  --po-green:#4f9a72;
+  --po-green-soft:#163024;
+  --po-amber:#d0a052;
+  --po-amber-soft:#352a17;
+  --po-red:#c66f6f;
+  --po-red-soft:#351e21;
+  --po-shadow:0 14px 42px rgba(0,0,0,.28);
+}
+html[data-theme="dark"].page-admin,html[data-theme="dark"].page-admin body{background:#0b1014!important;color:#e8eef1!important}
+html[data-theme="dark"].page-admin header{background:rgba(11,16,20,.94)!important;border-color:#26353d!important}
+html[data-theme="dark"].page-admin h1,html[data-theme="dark"].page-admin h2,html[data-theme="dark"].page-admin h3{color:#eef4f6!important}
+html[data-theme="dark"].page-admin .subtitle,html[data-theme="dark"].page-admin .muted,html[data-theme="dark"].page-admin .toggle-hint,html[data-theme="dark"].page-admin .offer-sub,html[data-theme="dark"].page-admin .catalog-meta{color:#91a1aa!important}
+html[data-theme="dark"].page-admin label{color:#b9c5cb!important}
+html[data-theme="dark"].page-admin .card,html[data-theme="dark"].page-admin .supplier,html[data-theme="dark"].page-admin .product-list,html[data-theme="dark"].page-admin .offer-list,html[data-theme="dark"].page-admin .settings-box,html[data-theme="dark"].page-admin .catalog-list,html[data-theme="dark"].page-admin .admin-panel,html[data-theme="dark"].page-admin .date-request{background:#131a1f!important;border-color:#2a3942!important;color:#e8eef1!important;box-shadow:0 1px 0 rgba(255,255,255,.02)!important}
+html[data-theme="dark"].page-admin details.card>summary,html[data-theme="dark"].page-admin .shead,html[data-theme="dark"].page-admin .modal-head,html[data-theme="dark"].page-admin .modal-footer{background:#182127!important;border-color:#2a3942!important;color:#e8eef1!important}
+html[data-theme="dark"].page-admin .shead:hover{background:#1d2930!important}
+html[data-theme="dark"].page-admin input,html[data-theme="dark"].page-admin textarea,html[data-theme="dark"].page-admin select{background:#0f161b!important;color:#e8eef1!important;border-color:#34454f!important;box-shadow:none!important}
+html[data-theme="dark"].page-admin input::placeholder,html[data-theme="dark"].page-admin textarea::placeholder{color:#697a84!important;opacity:1}
+html[data-theme="dark"].page-admin input:focus,html[data-theme="dark"].page-admin textarea:focus,html[data-theme="dark"].page-admin select:focus{outline:3px solid rgba(108,159,196,.16)!important;border-color:#638eaa!important}
+html[data-theme="dark"].page-admin button{background:#1a242a!important;color:#dfe7ea!important;border-color:#35454e!important}
+html[data-theme="dark"].page-admin button:hover{background:#223039!important}
+html[data-theme="dark"].page-admin button.primary{background:#3f805d!important;border-color:#4e9870!important;color:#fff!important}
+html[data-theme="dark"].page-admin button.primary:hover{background:#478c66!important}
+html[data-theme="dark"].page-admin button.danger{background:#351e21!important;border-color:#654047!important;color:#efb4b4!important}
+html[data-theme="dark"].page-admin button.danger:hover{background:#432428!important}
+html[data-theme="dark"].page-admin .nav button{background:transparent!important;color:#9cacb5!important;border-color:transparent!important}
+html[data-theme="dark"].page-admin .nav button:hover{background:#172127!important;color:#e8eef1!important}
+html[data-theme="dark"].page-admin .nav button.active{background:#182127!important;border-color:#30414a!important;color:#f0f5f7!important}
+html[data-theme="dark"].page-admin .stat,html[data-theme="dark"].page-admin .unit-inline,html[data-theme="dark"].page-admin .status-pill{background:#182127!important;border-color:#30414a!important;color:#b7c4ca!important}
+html[data-theme="dark"].page-admin .status-active{background:#163024!important;border-color:#315f48!important;color:#9ed5b5!important}
+html[data-theme="dark"].page-admin .status-inactive{background:#351e21!important;border-color:#654047!important;color:#e7aaaa!important}
+html[data-theme="dark"].page-admin .branch,html[data-theme="dark"].page-admin .product-row,html[data-theme="dark"].page-admin .offer-row,html[data-theme="dark"].page-admin .catalog-row{background:#131a1f!important;border-color:#26353d!important;color:#e8eef1!important}
+html[data-theme="dark"].page-admin .offer-row.inactive{background:#10161a!important;opacity:.68!important}
+html[data-theme="dark"].page-admin .catalog-row.unlinked{background:#241f16!important}
+html[data-theme="dark"].page-admin .compare-suppliers,html[data-theme="dark"].page-admin .delivery-details,html[data-theme="dark"].page-admin .update-box{background:#182127!important;border-color:#30414a!important;color:#dfe7ea!important}
+html[data-theme="dark"].page-admin .modal{background:#131a1f!important;border-color:#30414a!important;box-shadow:0 28px 90px rgba(0,0,0,.55)!important}
+html[data-theme="dark"].page-admin .modal-backdrop{background:rgba(0,0,0,.68)!important}
+html[data-theme="dark"].page-admin .po-role-switch a{background:#131a1f!important;color:#aebcc3!important;border-color:#30414a!important}
+html[data-theme="dark"].page-admin .po-role-switch a:hover{background:#1d2930!important;color:#eef4f6!important}
+html[data-theme="dark"].page-admin .po-schedule{background:#161f24!important;border-color:#30414a!important}
+html[data-theme="dark"].page-admin .po-schedule.is-disabled{background:#10161a!important;border-color:#27343b!important}
+html[data-theme="dark"].page-admin .po-day{background:#10171b!important;color:#b9c6cc!important;border-color:#34454f!important}
+html[data-theme="dark"].page-admin .po-day:hover{background:#1f2b32!important}
+html[data-theme="dark"].page-admin .po-day.active{background:#3f805d!important;border-color:#5a9f77!important;color:#fff!important}
+html[data-theme="dark"].page-admin table,html[data-theme="dark"].page-admin th,html[data-theme="dark"].page-admin td{border-color:#2a3942!important;color:#dfe7ea!important}
+html[data-theme="dark"].page-admin th{background:#182127!important}
+html[data-theme="dark"].page-admin td{background:#131a1f!important}
+html[data-theme="dark"].page-admin .empty{color:#86969f!important}
+
+@media(max-width:900px){.page-admin .po-schedule-grid{grid-template-columns:1fr}}
+@media(max-width:620px){
+  .page-admin .po-schedule{padding:9px}
+  .page-admin .po-schedule-days{grid-template-columns:1fr}
+  .page-admin .po-day-picker{gap:3px}
+  .page-admin .po-day{min-height:34px!important;font-size:10px!important}
+  .page-admin .po-schedule-head{align-items:flex-start;flex-direction:column}
+  .page-admin .po-branch-input{max-width:none;width:100%}
+}
