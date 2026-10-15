@@ -11,7 +11,7 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
 
   const link=document.createElement("link");
   link.rel="stylesheet";
-  link.href="pro-optima-ui.css?v=20261015";
+  link.href="pro-optima-ui.css?v=20261015-2";
   document.head.appendChild(link);
 
   if(page==="admin.html"){
@@ -49,6 +49,9 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       const cardHistory=document.createElement("script");
       cardHistory.src="admin-order-card-history.js?v=20261015-2";
       document.body.appendChild(cardHistory);
+      const updateSafety=document.createElement("script");
+      updateSafety.src="admin-update-safety.js?v=20261015-1";
+      document.body.appendChild(updateSafety);
     }
     if(page==="operator.html"){
       const dispatcherAuth=document.createElement("script");
