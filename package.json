@@ -8,6 +8,7 @@
     "check": "node --check restore-start.js"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "ws": "^8.18.0"
   },
   "engines": {
