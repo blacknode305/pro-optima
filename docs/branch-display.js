@@ -23,14 +23,11 @@
       if(el.textContent.trim()==="Используемые")el.textContent="Наименования";
       if(el.textContent.trim()==="Неиспользуемые")el.textContent="Не используются";
     });
-    document.querySelectorAll(".offer-sub,.msg,.empty").forEach(el=>{
-      const text=el.textContent;
-      const next=text
-        .replace(/предложения без цены/gi,"позиции без цены")
-        .replace(/единственное предложение с ценой/gi,"единственная позиция с ценой")
-        .replace(/закреплённых используемых товаров/gi,"закреплённых наименований");
-      if(next!==text)el.textContent=next;
-    });
+    document.querySelectorAll(".offer-sub,.msg,.empty").forEach(el=>replaceText(el,[
+      [/предложения без цены/gi,"позиции без цены"],
+      [/единственное предложение с ценой/gi,"единственная позиция с ценой"],
+      [/закреплённых используемых товаров/gi,"закреплённых наименований"]
+    ]));
   }
   function apply(){
     document.querySelectorAll("select").forEach(select=>{
