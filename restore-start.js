@@ -3,8 +3,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const cp = require("child_process");
 const Module = require("module");
+const AdmZip = require("adm-zip");
 
 function naturalCompare(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -26,11 +26,9 @@ if (zipBuffer.length < 4 || zipBuffer.subarray(0, 2).toString("hex") !== "504b")
 }
 
 const workDir = path.join(os.tmpdir(), "pro-optima-restored");
-const zipPath = path.join(os.tmpdir(), "pro-optima-restored.zip");
 fs.rmSync(workDir, { recursive: true, force: true });
 fs.mkdirSync(workDir, { recursive: true });
-fs.writeFileSync(zipPath, zipBuffer);
-cp.execFileSync("unzip", ["-q", "-o", zipPath, "-d", workDir], { stdio: "inherit" });
+new AdmZip(zipBuffer).extractAllTo(workDir, true);
 
 const entries = fs.readdirSync(workDir, { withFileTypes: true });
 let appRoot = workDir;
