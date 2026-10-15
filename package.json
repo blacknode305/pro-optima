@@ -1,0 +1,16 @@
+{
+  "name": "pro-optima",
+  "version": "2.0.0",
+  "private": true,
+  "description": "PRO OPTIMA monorepo: Railway API + GitHub Pages client",
+  "scripts": {
+    "start": "npm --prefix server start",
+    "check": "npm --prefix server run check"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
