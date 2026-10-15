@@ -2,6 +2,36 @@
 (function(){
   const MAP={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркен","САРАНЬ":"Сарань","ПРИШАХТИНСК":"Пришахтинск"};
   const label=v=>MAP[String(v??"").trim().toLocaleUpperCase("ru-RU")]||String(v??"");
+  function replaceText(el,pairs){
+    if(!el)return;
+    el.childNodes.forEach(node=>{
+      if(node.nodeType!==Node.TEXT_NODE)return;
+      let value=node.nodeValue;
+      pairs.forEach(([from,to])=>{value=value.replace(from,to)});
+      if(value!==node.nodeValue)node.nodeValue=value;
+    });
+  }
+  function adminTerms(){
+    if(!document.documentElement.classList.contains("page-admin"))return;
+    document.querySelectorAll(".settings-box h3,.settings-box p").forEach(el=>replaceText(el,[
+      [/Обновление прайсов \/ предложений/g,"Обновление прайсов / каталога"],
+      [/каталог предложений/gi,"каталог"]
+    ]));
+    document.querySelectorAll("#viewProposals .empty").forEach(el=>{if(el.textContent.trim()==="Предложения не найдены.")el.textContent="В каталоге ничего не найдено."});
+    document.querySelectorAll("#viewProposals button").forEach(el=>{if(el.textContent.trim()==="Использовать")el.textContent="В наименования"});
+    document.querySelectorAll("#compareSummary b").forEach(el=>{
+      if(el.textContent.trim()==="Используемые")el.textContent="Наименования";
+      if(el.textContent.trim()==="Неиспользуемые")el.textContent="Не используются";
+    });
+    document.querySelectorAll(".offer-sub,.msg,.empty").forEach(el=>{
+      const text=el.textContent;
+      const next=text
+        .replace(/предложения без цены/gi,"позиции без цены")
+        .replace(/единственное предложение с ценой/gi,"единственная позиция с ценой")
+        .replace(/закреплённых используемых товаров/gi,"закреплённых наименований");
+      if(next!==text)el.textContent=next;
+    });
+  }
   function apply(){
     document.querySelectorAll("select").forEach(select=>{
       if(!/branch|филиал|производ/i.test(`${select.id} ${select.name||""} ${select.previousElementSibling?.textContent||""}`))return;
@@ -19,6 +49,7 @@
       for(let i=0;i<parts.length;i++){const pretty=MAP[String(parts[i]||"").trim().toLocaleUpperCase("ru-RU")];if(pretty){parts[i]=pretty;changed=true}}
       if(changed)mt.textContent=parts.join(" · ");
     }
+    adminTerms();
   }
   window.PRO_OPTIMA_BRANCH_LABEL=label;
   apply();new MutationObserver(apply).observe(document.body,{childList:true,subtree:true});
