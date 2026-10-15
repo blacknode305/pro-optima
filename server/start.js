@@ -19,6 +19,18 @@ function broadcastDbChanged(){
   const meta=metaSnapshot(),payload=JSON.stringify({type:"db-changed",revision:meta.revision,updatedAt:meta.updatedAt});
   for(const ws of clients){if(ws.readyState===WebSocket.OPEN)try{ws.send(payload)}catch{}}
 }
+function blockLegacySupplierUpdate(req,res,url){
+  if(url.pathname!=="/api/admin/apply-update"||req.method!=="POST")return false;
+  const payload=JSON.stringify({error:"Legacy supplier UPDATE endpoint is disabled. Reload Admin and use the revision-protected updater."});
+  res.writeHead(410,{
+    "Content-Type":"application/json; charset=utf-8",
+    "Content-Length":Buffer.byteLength(payload),
+    "Access-Control-Allow-Origin":"*",
+    "Cache-Control":"no-store"
+  });
+  res.end(payload);
+  return true;
+}
 
 const originalCreateServer=http.createServer.bind(http);
 http.createServer=function(...args){
@@ -27,6 +39,7 @@ http.createServer=function(...args){
     const listener=args[listenerIndex];
     args[listenerIndex]=async(req,res)=>{
       const url=new URL(req.url,`http://${req.headers.host||"localhost"}`);
+      if(blockLegacySupplierUpdate(req,res,url))return;
       if(await handleDispatcherApi(req,res,url))return;
       if(await handleExtraApi(req,res))return;
       return listener(req,res);
