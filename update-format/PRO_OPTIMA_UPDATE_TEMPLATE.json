@@ -1,7 +1,9 @@
 {
   "updateType": "pro-optima-supplier-update-v1",
+  "baseRevision": 0,
   "generatedAt": "2026-10-15T00:00:00.000Z",
   "sourceDescription": "Пример: новый прайс поставщика. Этот файл формирует ChatGPT после обработки прайса.",
+  "allowOperationalPatches": false,
   "suppliersUpsert": [
     {
       "id": "sup_EXISTING_OR_NEW",
