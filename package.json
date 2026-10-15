@@ -4,11 +4,10 @@
   "private": true,
   "description": "PRO OPTIMA monorepo: Railway API + GitHub Pages client",
   "scripts": {
-    "start": "node restore-start.js",
-    "check": "node --check restore-start.js"
+    "start": "npm --prefix server start",
+    "check": "npm --prefix server run check"
   },
   "dependencies": {
-    "adm-zip": "^0.5.16",
     "ws": "^8.18.0"
   },
   "engines": {

@@ -1,0 +1,63 @@
+{
+  "updateType": "pro-optima-supplier-update-v1",
+  "generatedAt": "2026-10-15T00:00:00.000Z",
+  "sourceDescription": "Пример: новый прайс поставщика. Этот файл формирует ChatGPT после обработки прайса.",
+  "suppliersUpsert": [
+    {
+      "id": "sup_EXISTING_OR_NEW",
+      "name": "НАЗВАНИЕ ПОСТАВЩИКА",
+      "contact": "",
+      "phone": "",
+      "note": "",
+      "active": true
+    }
+  ],
+  "catalogUpsert": [
+    {
+      "id": "cat_STABLE_ID",
+      "supplierId": "sup_EXISTING_OR_NEW",
+      "name": "Товар из прайса",
+      "unit": "кг",
+      "price": 1234,
+      "branch": "*",
+      "boxQty": null,
+      "packQty": null,
+      "placeholder": false,
+      "availability": "available",
+      "availabilityNote": "",
+      "source": "Прайс 2026-10-15",
+      "sourceProductId": null,
+      "note": ""
+    }
+  ],
+  "catalogRetireIds": [],
+  "retireNote": "Нет в новом прайс-листе",
+  "catalogLinks": [
+    {
+      "catalogItemId": "cat_STABLE_ID",
+      "productId": 110
+    }
+  ],
+  "productPatches": [
+    {
+      "productId": 110,
+      "addCatalogLinks": [
+        "cat_STABLE_ID"
+      ]
+    }
+  ],
+  "offersUpsert": [
+    {
+      "supplierId": "sup_EXISTING_OR_NEW",
+      "productId": 110,
+      "supplier": "НАЗВАНИЕ ПОСТАВЩИКА",
+      "product": "Наш товар",
+      "branch": "*",
+      "unit": "кг",
+      "price": 1234,
+      "manualActive": null,
+      "manualActiveByBranch": {},
+      "catalogItemId": "cat_STABLE_ID"
+    }
+  ]
+}

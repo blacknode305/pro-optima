@@ -1,0 +1,13 @@
+{
+  "name": "pro-optima-server",
+  "version": "2.0.0",
+  "private": true,
+  "description": "PRO OPTIMA shared JSON API for Railway",
+  "scripts": {
+    "start": "node start.js",
+    "check": "node --check server.js && node --check start.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
