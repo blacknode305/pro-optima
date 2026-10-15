@@ -29,6 +29,10 @@ html.page-admin,html.page-admin body{background:var(--po-bg)!important;color:var
 .page-admin label{font-size:12px!important;font-weight:650!important;color:#4d5d66!important;margin:9px 0 5px!important}
 .page-admin input,.page-admin textarea,.page-admin select{min-height:38px!important;padding:8px 10px!important;border:1px solid #c7d2d8!important;border-radius:var(--po-radius-sm)!important;background:#fff!important;color:var(--po-text)!important;box-shadow:inset 0 1px 2px rgba(35,49,58,.02)}
 .page-admin input:focus,.page-admin textarea:focus,.page-admin select:focus{outline:3px solid rgba(66,111,146,.12)!important;border-color:#8eabbf!important}
+/* Keep one clear control in search fields: the browser-native one. */
+.page-admin .clear-wrap>input[type="search"]{padding-right:10px!important}
+.page-admin .clear-wrap>input[type="search"]+.clear-btn{display:none!important}
+.page-admin .clear-btn,.page-admin .clear-btn:hover,.page-admin .clear-btn:active{transform:translateY(-50%)!important}
 .page-admin button{min-height:36px!important;padding:7px 11px!important;border:1px solid #c5d0d6!important;border-radius:var(--po-radius-sm)!important;background:#f3f6f7!important;color:#34434c!important;font-weight:650!important;box-shadow:none!important;transition:.15s ease}
 .page-admin button:hover{background:#eaf0f2!important;transform:translateY(-1px)}
 .page-admin button:active{transform:none}
