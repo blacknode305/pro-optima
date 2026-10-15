@@ -90,3 +90,8 @@ html[data-theme="dark"].page-admin .empty{color:#86969f!important}
   .page-admin .po-schedule-head{align-items:flex-start;flex-direction:column}
   .page-admin .po-branch-input{max-width:none;width:100%}
 }
+html[data-theme="dark"].page-admin .report-table td:first-child{background:#141c21!important}
+html[data-theme="dark"].page-admin .price-cell.best{background:#193525!important;box-shadow:inset 3px 0 0 #5fae7d!important}
+html[data-theme="dark"].page-admin .price-cell.high{background:#382a1a!important;box-shadow:inset 3px 0 0 #c99145!important}
+html[data-theme="dark"].page-admin .price-cell.noprice{background:#182e39!important;box-shadow:inset 3px 0 0 #5e9bb8!important}
+html[data-theme="dark"].page-admin .price-cell.missing{background:#171d21!important;color:#708089!important}
