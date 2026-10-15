@@ -1,0 +1,47 @@
+# macOS metadata
+.DS_Store
+**/.DS_Store
+._*
+**/._*
+
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Environment files / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data: production state belongs on the Railway volume, not in Git
+server/data/database.json
+server/data/meta.json
+server/data/access.json
+server/data/backups/
+server/data/*.tmp*
+/var/
+
+# Logs and diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+report.*.json
+
+# Editor / OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build / cache output
+coverage/
+.nyc_output/
+.cache/
+.parcel-cache/
+dist/
+out/
+.tmp/
+tmp/
+*.tmp
