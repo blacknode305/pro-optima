@@ -85,6 +85,7 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       appendScript("admin-update-safety.js?v=20261015-1");
       installSafeMutationObserver();
       appendScript("admin-ui-overhaul.js?v=20261015-2",true);
+      appendScript("admin-offer-status-fix.js?v=20261016-1",true);
     }
 
     if(page==="operator.html")appendScript("operator-dispatcher-auth.js?v=20261015-1");
