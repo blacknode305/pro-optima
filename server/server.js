@@ -37,6 +37,7 @@ if (!process.env.SOPTIMA_ADMIN_TOKEN) {
 function nowIso(){ return new Date().toISOString(); }
 function clone(x){ return structuredClone(x); }
 function normalize(s){ return String(s ?? "").trim().toLocaleLowerCase("ru-RU"); }
+function branchKey(s){ const key=normalize(s); return key==="нуркена"?"нуркен":key; }
 function uid(prefix){ return prefix + "_" + Date.now().toString(36) + "_" + crypto.randomBytes(4).toString("hex"); }
 function dateInAlmaty(d = new Date()){
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -233,10 +234,16 @@ function readBody(req){
 function branchesFromDb(db){
   const fixed=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
   const extra=ensureArray(db.suppliers).flatMap(s=>ensureArray(s.schedules).map(x=>String(x.branch||"").trim())).filter(Boolean);
-  return [...new Set([...fixed,...extra])];
+  const out=[],seen=new Set();
+  for(const branch of [...fixed,...extra]){
+    const key=branchKey(branch);
+    if(!key||seen.has(key))continue;
+    seen.add(key);out.push(branch);
+  }
+  return out;
 }
 function scheduleFor(supplier,branch){
-  return ensureArray(supplier?.schedules).find(x=>normalize(x.branch)===normalize(branch))||null;
+  return ensureArray(supplier?.schedules).find(x=>sameBranch(x.branch,branch))||null;
 }
 function parseDays(text){
   return String(text||"").split(/[,;/]+/).map(x=>x.trim()).filter(Boolean)
@@ -258,15 +265,16 @@ function deliveryDateForSchedule(schedule,requestDate){
   return addDaysIso(requestDate,best===7?0:best);
 }
 function productUsedOnBranch(p,branch){
-  return !ensureArray(p?.excludedBranches).some(x=>normalize(x)===normalize(branch));
+  return !ensureArray(p?.excludedBranches).some(x=>sameBranch(x,branch));
 }
 function supplierById(db,id){return ensureArray(db.suppliers).find(s=>String(s.id)===String(id))||null}
 function offerUnit(o){return String(o?.unit||"").trim()}
 function hasPrice(o){return Number.isFinite(Number(o?.price)) && Number(o.price)>0}
 function manualSetting(o,branch){
   const map=o?.manualActiveByBranch;
-  if(map&&Object.prototype.hasOwnProperty.call(map,branch)){
-    return map[branch]===true?true:map[branch]===false?false:null;
+  if(map){
+    const key=Object.keys(map).find(x=>sameBranch(x,branch));
+    if(key!==undefined)return map[key]===true?true:map[key]===false?false:null;
   }
   return o?.manualActive===true?true:o?.manualActive===false?false:null;
 }
@@ -276,7 +284,7 @@ function productLinks(p){
 function offerFor(db,supplierId,productId,branch,unit){
   const rows=ensureArray(db.offers).filter(o=>
     String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
-    (String(o.branch||"*")==="*"||normalize(o.branch)===normalize(branch))
+    (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
   );
   const same=rows.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
   const pool=same.length?same:rows;
@@ -348,7 +356,7 @@ function buildPlanForDate(db,branch,date){
   })).filter(x=>x.items.length);
 
   const approved=ensureArray(db.dateRequests).filter(r=>
-    normalize(r.branch)===normalize(branch)&&r.status==="approved"&&r.requestedDate===date
+    sameBranch(r.branch,branch)&&r.status==="approved"&&r.requestedDate===date
   );
   for(const r of approved){
     if(rows.some(x=>String(x.supplierId)===String(r.supplierId)))continue;
@@ -365,11 +373,11 @@ function buildPlanForDate(db,branch,date){
   return rows.sort((a,b)=>String(a.supplier).localeCompare(String(b.supplier),"ru"));
 }
 function ordersForBranch(db,branch){
-  return ensureArray(db.history).filter(x=>normalize(x.branch)===normalize(branch))
+  return ensureArray(db.history).filter(x=>sameBranch(x.branch,branch))
     .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
 function transfersForBranch(db,branch){
-  return ensureArray(db.transfers).filter(x=>normalize(x.requesterBranch)===normalize(branch)||normalize(x.fromBranch)===normalize(branch))
+  return ensureArray(db.transfers).filter(x=>sameBranch(x.requesterBranch,branch)||sameBranch(x.fromBranch,branch))
     .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
 function operatorBootstrap(db,branch){
@@ -379,7 +387,7 @@ function operatorBootstrap(db,branch){
     plan:buildPlanForDate(db,branch,today),
     orders:ordersForBranch(db,branch).slice(0,250),
     transfers:transfersForBranch(db,branch).slice(0,250),
-    dateRequests:ensureArray(db.dateRequests).filter(x=>normalize(x.branch)===normalize(branch)).slice(-100),
+    dateRequests:ensureArray(db.dateRequests).filter(x=>sameBranch(x.branch,branch)).slice(-100),
     branches:branchesFromDb(db),
     suppliers:ensureArray(db.suppliers).filter(s=>scheduleFor(s,branch)&&s.active!==false)
       .map(s=>({id:s.id,name:s.name,phone:s.phone||"",contact:s.contact||""})).sort((a,b)=>a.name.localeCompare(b.name,"ru")),
@@ -388,7 +396,7 @@ function operatorBootstrap(db,branch){
   };
 }
 function findOrder(db,id){return ensureArray(db.history).find(x=>String(x.id)===String(id))||null}
-function sameBranch(a,b){return normalize(a)===normalize(b)}
+function sameBranch(a,b){return branchKey(a)===branchKey(b)}
 function sanitizeQty(v){
   if(v===null||v===undefined||v==="")return 0;
   if(v==="-")return "-";
