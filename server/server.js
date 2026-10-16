@@ -287,10 +287,18 @@ function offerFor(db,supplierId,productId,branch,unit){
     String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
     (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
   );
-  const same=rows.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
-  const pool=same.length?same:rows;
+  if(!rows.length)return null;
+
+  // Match the admin "Заказник": for a concrete branch the branch-specific
+  // row overrides the wildcard row. Most importantly, an explicit
+  // "Неактивен" is final — never fall back to an inactive offer.
+  const specific=rows.filter(o=>String(o.branch||"*")!=="*"&&sameBranch(o.branch,branch));
+  const effective=specific.length?specific:rows.filter(o=>String(o.branch||"*")==="*");
+  const same=effective.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
+  const pool=same.length?same:effective;
   const active=pool.filter(o=>manualSetting(o,branch)!==false);
-  return (active.length?active:pool).sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
+  if(!active.length)return null;
+  return active.sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
 }
 function chooseAssignment(db,product,branch,scheduled){
   if(!productUsedOnBranch(product,branch))return null;
@@ -427,6 +435,26 @@ function filterOrderItemsToPlan(items,plan){
     const id=Number(item.productId);
     return (Number.isFinite(id)&&id>0&&allowedIds.has(id))||allowedNames.has(normalize(item.product));
   });
+}
+function excludeUnusedProductsForBranch(db,branch,items){
+  let changed=0;
+  for(const item of ensureArray(items)){
+    if(item?.used!==false&&item?.stock!=="-")continue;
+    const product=ensureArray(db.products).find(p=>
+      (item.productId!==null&&item.productId!==undefined&&String(p.id)===String(item.productId))||
+      ((!item.productId)&&normalize(p.name)===normalize(item.product))
+    );
+    if(!product)continue;
+    const next=[];
+    for(const raw of ensureArray(product.excludedBranches)){
+      const name=canonicalBranch(raw);
+      if(name&&!next.some(x=>sameBranch(x,name)))next.push(name);
+    }
+    const canonical=canonicalBranch(branch);
+    if(canonical&&!next.some(x=>sameBranch(x,canonical))){next.push(canonical);changed++}
+    product.excludedBranches=next;
+  }
+  return changed;
 }
 const STAGE_RANK={draft:0,sent:1,confirmed:2,expected:2,done:3,cancelled:3};
 function canSetStage(oldStage,newStage){
@@ -640,6 +668,11 @@ async function api(req,res,pathname){
         if(order && !canSetStage(order.stage,stage))return send(res,409,{error:"Недопустимый переход статуса."},cors);
         const plan=allowedPlan.find(x=>String(x.supplierId)===String(supplier.id));
         const items=filterOrderItemsToPlan(body.items,plan);
+        // A dash in branch stock means the product is not used by this branch at all.
+        // Persist that branch-level exclusion so it disappears from the admin orderbook
+        // and from every future supplier order for this branch. Supplier inactivity is
+        // separate and only changes which supplier receives an otherwise active product.
+        excludeUnusedProductsForBranch(db,branch,items);
         if(!order){
           order={
             id:uid("ord"),requestDate,deliveryDate:String(body.deliveryDate||plan?.deliveryDate||requestDate),
