@@ -397,7 +397,7 @@ function operatorBootstrap(db,branch){
   };
 }
 function findOrder(db,id){return ensureArray(db.history).find(x=>String(x.id)===String(id))||null}
-function sameBranch(a,b){return branchKey(a)===branchKey(b)}
+function sameBranch(a,b){return normalize(canonicalBranch(a))===normalize(canonicalBranch(b))}
 function sanitizeQty(v){
   if(v===null||v===undefined||v==="")return 0;
   if(v==="-")return "-";
@@ -418,6 +418,15 @@ function sanitizeOrderItems(items){
     deliveredUnit:String(x.deliveredUnit||x.unit||"").trim(),
     note:String(x.note||"").trim()
   })).filter(x=>x.product);
+}
+function filterOrderItemsToPlan(items,plan){
+  const allowedItems=ensureArray(plan?.items);
+  const allowedIds=new Set(allowedItems.map(x=>Number(x.productId)).filter(x=>Number.isFinite(x)&&x>0));
+  const allowedNames=new Set(allowedItems.map(x=>normalize(x.name)).filter(Boolean));
+  return sanitizeOrderItems(items).filter(item=>{
+    const id=Number(item.productId);
+    return (Number.isFinite(id)&&id>0&&allowedIds.has(id))||allowedNames.has(normalize(item.product));
+  });
 }
 const STAGE_RANK={draft:0,sent:1,confirmed:2,expected:2,done:3,cancelled:3};
 function canSetStage(oldStage,newStage){
@@ -630,7 +639,7 @@ async function api(req,res,pathname){
         const stage=String(body.stage||"sent");
         if(order && !canSetStage(order.stage,stage))return send(res,409,{error:"Недопустимый переход статуса."},cors);
         const plan=allowedPlan.find(x=>String(x.supplierId)===String(supplier.id));
-        const items=sanitizeOrderItems(body.items);
+        const items=filterOrderItemsToPlan(body.items,plan);
         if(!order){
           order={
             id:uid("ord"),requestDate,deliveryDate:String(body.deliveryDate||plan?.deliveryDate||requestDate),
