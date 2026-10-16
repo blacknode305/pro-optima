@@ -1,0 +1,100 @@
+name: Patch stock dash branch exclusion
+
+on:
+  push:
+    branches: [fix/inactive-offer-not-in-order]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Make stock dash exclude product from branch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch stock dash behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/server.js')
+          s=p.read_text()
+
+          target='''function filterOrderItemsToPlan(items,plan){
+            const allowedItems=ensureArray(plan?.items);
+            const allowedIds=new Set(allowedItems.map(x=>Number(x.productId)).filter(x=>Number.isFinite(x)&&x>0));
+            const allowedNames=new Set(allowedItems.map(x=>normalize(x.name)).filter(Boolean));
+            return sanitizeOrderItems(items).filter(item=>{
+              const id=Number(item.productId);
+              return (Number.isFinite(id)&&id>0&&allowedIds.has(id))||allowedNames.has(normalize(item.product));
+            });
+          }
+          const STAGE_RANK='''
+          replacement='''function filterOrderItemsToPlan(items,plan){
+            const allowedItems=ensureArray(plan?.items);
+            const allowedIds=new Set(allowedItems.map(x=>Number(x.productId)).filter(x=>Number.isFinite(x)&&x>0));
+            const allowedNames=new Set(allowedItems.map(x=>normalize(x.name)).filter(Boolean));
+            return sanitizeOrderItems(items).filter(item=>{
+              const id=Number(item.productId);
+              return (Number.isFinite(id)&&id>0&&allowedIds.has(id))||allowedNames.has(normalize(item.product));
+            });
+          }
+          function excludeUnusedProductsForBranch(db,branch,items){
+            let changed=0;
+            for(const item of ensureArray(items)){
+              if(item?.used!==false&&item?.stock!=="-")continue;
+              const product=ensureArray(db.products).find(p=>
+                (item.productId!==null&&item.productId!==undefined&&String(p.id)===String(item.productId))||
+                ((!item.productId)&&normalize(p.name)===normalize(item.product))
+              );
+              if(!product)continue;
+              const next=[];
+              for(const raw of ensureArray(product.excludedBranches)){
+                const name=canonicalBranch(raw);
+                if(name&&!next.some(x=>sameBranch(x,name)))next.push(name);
+              }
+              const canonical=canonicalBranch(branch);
+              if(canonical&&!next.some(x=>sameBranch(x,canonical))){next.push(canonical);changed++}
+              product.excludedBranches=next;
+            }
+            return changed;
+          }
+          const STAGE_RANK='''
+          if s.count(target)!=1:
+              raise SystemExit(f'helper insertion target count={s.count(target)}')
+          s=s.replace(target,replacement)
+
+          target2='''        const plan=allowedPlan.find(x=>String(x.supplierId)===String(supplier.id));
+                  const items=filterOrderItemsToPlan(body.items,plan);
+                  if(!order){'''
+          replacement2='''        const plan=allowedPlan.find(x=>String(x.supplierId)===String(supplier.id));
+                  const items=filterOrderItemsToPlan(body.items,plan);
+                  // A dash in branch stock means the product is not used by this branch at all.
+                  // Persist that branch-level exclusion so it disappears from the admin orderbook
+                  // and from every future supplier order for this branch. Supplier inactivity is
+                  // separate and only changes which supplier receives an otherwise active product.
+                  excludeUnusedProductsForBranch(db,branch,items);
+                  if(!order){'''
+          if s.count(target2)!=1:
+              raise SystemExit(f'order hook target count={s.count(target2)}')
+          s=s.replace(target2,replacement2)
+          p.write_text(s)
+          PY
+
+          node --check server/server.js
+          npm run check
+          git diff --check
+          grep -F 'function excludeUnusedProductsForBranch' server/server.js
+          grep -F 'excludeUnusedProductsForBranch(db,branch,items);' server/server.js
+          grep -F 'if(!active.length)return null;' server/server.js
+
+      - name: Commit patch
+        run: |
+          git config user.name "Alexandr"
+          git config user.email "blacknode305@gmail.com"
+          git add server/server.js
+          git diff --cached --check
+          git commit -m "Make stock dash exclude product from branch"
+          git push
