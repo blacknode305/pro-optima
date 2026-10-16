@@ -1,12 +1,13 @@
 "use strict";
 
 (function(){
-  const PO_BRANCHES=["ГОРНЯК","ЛОБОДЫ","НУРКЕН","САРАНЬ","ПРИШАХТИНСК"];
-  const PO_BRANCH_LABELS={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркен","НУРКЕНА":"Нуркен","САРАНЬ":"Сарань","ПРИШАХТИНСК":"Пришахтинск"};
+  const PO_BRANCHES=["Горняк","Лободы","Нуркена"];
+  const PO_BRANCH_LABELS={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркена","НУРКЕНА":"Нуркена"};
   const PO_DAYS=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
   const PO_DAY_SHORT={"Понедельник":"Пн","Вторник":"Вт","Среда":"Ср","Четверг":"Чт","Пятница":"Пт","Суббота":"Сб","Воскресенье":"Вс"};
   const branchLabel=value=>PO_BRANCH_LABELS[String(value??"").trim().toLocaleUpperCase("ru-RU")]||String(value??"").trim();
-  const branchKey=value=>{const key=normalize(value);return key==="нуркена"?"нуркен":key};
+  const branchKey=value=>{const key=normalize(value);return key==="нуркен"||key==="нуркена"?"нуркена":key};
+  const canonicalBranch=value=>{const key=branchKey(value);return key==="горняк"?"Горняк":key==="лободы"?"Лободы":key==="нуркена"?"Нуркена":""};
   window.displayBranchName=window.displayBranchName||branchLabel;
 
   function removeGeneratedClearControls(root=document){
@@ -99,10 +100,12 @@
     const rows=[],seen=new Set();
     for(const card of root.querySelectorAll(".po-schedule")){
       if(!card.querySelector('[data-key="enabled"]')?.checked)continue;
-      const branch=card.querySelector('[data-key="branch"]')?.value.trim()||"";
+      const rawBranch=card.querySelector('[data-key="branch"]')?.value.trim()||"";
+      const branch=canonicalBranch(rawBranch);
       const days=key=>[...card.querySelectorAll(`.po-day-picker[data-key="${key}"] .po-day.active`)].map(x=>x.dataset.day).join(", ");
       const order=days("order"),delivery=days("delivery"),note=card.querySelector('[data-key="note"]')?.value.trim()||"";
-      if(!branch)throw new Error("Укажите название филиала.");
+      if(!rawBranch)throw new Error("Укажите название филиала.");
+      if(!branch)throw new Error("Допустимы только филиалы: Горняк, Лободы, Нуркена.");
       const key=branchKey(branch);
       if(seen.has(key))throw new Error(`Филиал «${branchLabel(branch)}» указан дважды.`);
       seen.add(key);
@@ -160,13 +163,12 @@
     const supplier=db[si];if(!supplier)return;
     const byBranch=new Map((supplier.schedules||[]).map(r=>[branchKey(r.branch),r]));
     const known=PO_BRANCHES.map(branch=>scheduleCard(branch,byBranch.get(branchKey(branch))||null,{enabled:byBranch.has(branchKey(branch))}));
-    const custom=(supplier.schedules||[]).filter(r=>!PO_BRANCHES.some(b=>branchKey(b)===branchKey(r.branch))).map(r=>scheduleCard(r.branch,r,{editableBranch:true,enabled:true}));
+    const custom=[];
     openModal("Редактирование поставщика",`<div id="modalError" class="modal-error"></div>
       <div class="modal-field"><label>Название</label><input id="editSupplierName" value="${esc(supplier.name)}"></div>
       <div class="modal-grid"><div class="modal-field"><label>Контакт</label><input id="editSupplierContact" value="${esc(supplier.contact)}"></div><div class="modal-field"><label>Телефон</label><input id="editSupplierPhone" value="${esc(supplier.phone)}"></div></div>
       <div class="po-schedule-title">Графики по филиалам</div>
-      <div id="poEditSupplierSchedules" class="po-schedule-grid">${known.join("")}${custom.join("")}</div>
-      <button class="secondary" onclick="addScheduleField()">＋ Другой филиал</button>`,
+      <div id="poEditSupplierSchedules" class="po-schedule-grid">${known.join("")}${custom.join("")}</div>`,
       `<button class="secondary" onclick="closeModal()">Отмена</button><button class="primary" onclick="saveSupplierEdit(${si})">Сохранить</button>`);
     bindScheduleRoot(document.getElementById("poEditSupplierSchedules"));
     removeGeneratedClearControls(document.getElementById("modalBody"));

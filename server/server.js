@@ -37,7 +37,8 @@ if (!process.env.SOPTIMA_ADMIN_TOKEN) {
 function nowIso(){ return new Date().toISOString(); }
 function clone(x){ return structuredClone(x); }
 function normalize(s){ return String(s ?? "").trim().toLocaleLowerCase("ru-RU"); }
-function branchKey(s){ const key=normalize(s); return key==="нуркена"?"нуркен":key; }
+function branchKey(s){ const key=normalize(s); return key==="нуркен"||key==="нуркена"?"нуркена":key; }
+function canonicalBranch(s){ const key=branchKey(s); return key==="горняк"?"Горняк":key==="лободы"?"Лободы":key==="нуркена"?"Нуркена":""; }
 function uid(prefix){ return prefix + "_" + Date.now().toString(36) + "_" + crypto.randomBytes(4).toString("hex"); }
 function dateInAlmaty(d = new Date()){
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -231,17 +232,7 @@ function readBody(req){
   });
 }
 
-function branchesFromDb(db){
-  const fixed=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
-  const extra=ensureArray(db.suppliers).flatMap(s=>ensureArray(s.schedules).map(x=>String(x.branch||"").trim())).filter(Boolean);
-  const out=[],seen=new Set();
-  for(const branch of [...fixed,...extra]){
-    const key=branchKey(branch);
-    if(!key||seen.has(key))continue;
-    seen.add(key);out.push(branch);
-  }
-  return out;
-}
+function branchesFromDb(){ return ["Горняк","Лободы","Нуркена"]; }
 function scheduleFor(supplier,branch){
   return ensureArray(supplier?.schedules).find(x=>sameBranch(x.branch,branch))||null;
 }
@@ -572,7 +563,7 @@ async function api(req,res,pathname){
 
   if(pathname==="/api/operator/login"&&req.method==="POST"){
     const body=await readBody(req);
-    const branch=String(body.branch||"").trim(),pin=String(body.pin||"");
+    const branch=canonicalBranch(body.branch),pin=String(body.pin||"");
     const {db}=loadState();
     if(!branchesFromDb(db).some(x=>sameBranch(x,branch)))return send(res,400,{error:"Неизвестное производство."},cors);
     const access=loadAccess(),rec=access.branches[branch];
@@ -764,7 +755,7 @@ async function api(req,res,pathname){
   }
   if(pathname==="/api/admin/access"&&req.method==="PUT"){
     const body=await readBody(req);
-    const branch=String(body.branch||"").trim(),pin=String(body.pin||"");
+    const branch=canonicalBranch(body.branch),pin=String(body.pin||"");
     const {db}=loadState();
     if(!branchesFromDb(db).some(x=>sameBranch(x,branch)))return send(res,400,{error:"Неизвестное производство."},cors);
     if(pin.length<4)return send(res,400,{error:"Пароль производства должен быть минимум 4 символа."},cors);
