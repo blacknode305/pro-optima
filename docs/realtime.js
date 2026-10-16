@@ -32,6 +32,9 @@
   async function pollOnce(){
     if(closedByPage||!operatorPolling)return;
     try{
+      // Operator deliberately uses revision polling instead of WebSocket. Railway's
+      // websocket edge can disconnect during deploys, while /api/health is tiny,
+      // cache-free and sufficient to decide whether the existing load() must run.
       const response=await fetch(api+"/api/health",{cache:"no-store"});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const message=await response.json();
