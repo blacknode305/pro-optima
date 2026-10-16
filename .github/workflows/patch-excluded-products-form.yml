@@ -126,10 +126,11 @@ jobs:
           }''',
               1)
 
+          # There are two global branch lists here: comparison and product activation. Both must use all real branches.
           rep('docs/admin.html',
               'const branches=["ГОРНЯК","ЛОБОДЫ","НУРКЕН","САРАНЬ","ПРИШАХТИНСК"];',
               'const branches=allBranches();',
-              1)
+              2)
           rep('docs/admin.html',
               'p.excludedBranches=branches.filter(b=>b!==branch);',
               'p.excludedBranches=branches.filter(b=>!sameBranchName(b,branch));',
