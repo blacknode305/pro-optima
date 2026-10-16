@@ -92,6 +92,6 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
     if(page==="form.html")appendScript("form-date-native.js?v=20261015-2");
 
     appendScript("branch-display.js?v=20261015-2",true);
-    appendScript("realtime.js?v=20261016-2");
+    appendScript("realtime.js?v=20261016-3");
   });
 })();
