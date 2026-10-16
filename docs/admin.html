@@ -1574,7 +1574,7 @@ function editProduct(i){
     <div class="modal-field"><label>Наименование</label><input id="editProductName" value="${esc(p.name)}"></div>
     <div class="modal-field"><label>Примечание</label><input id="editProductNote" value="${esc(p.note)}"></div>
     <div class="modal-field"><label>Статус</label><select id="editProductStatus"><option value="used" ${p.catalogStatus!=="proposal"?"selected":""}>Используемый</option><option value="proposal" ${p.catalogStatus==="proposal"?"selected":""}>Предложение</option></select></div>
-    <div class="modal-field"><label>Не использовать на производствах</label><div class="branch-checks">${allBranches().map(b=>`<label><input type="checkbox" class="edit-product-excluded" value="${esc(b)}" ${(p.excludedBranches||[]).includes(b)?"checked":""}> ${esc(b)}</label>`).join("")}</div></div>`,
+    <div class="modal-field"><label>Не использовать на производствах</label><div class="branch-checks">${allBranches().map(b=>`<label><input type="checkbox" class="edit-product-excluded" value="${esc(b)}" ${(p.excludedBranches||[]).some(x=>sameBranchName(x,b))?"checked":""}> ${esc(b)}</label>`).join("")}</div></div>`,
     `<button class="secondary" onclick="closeModal()">Отмена</button><button class="primary" onclick="saveProductEdit(${i})">Сохранить</button>`);
 }
 function saveProductEdit(i){
@@ -1607,12 +1607,16 @@ function productAnalogNames(p){
 }
 function productAliases(p){return Array.isArray(p?.aliases)?p.aliases.filter(Boolean):[]}
 function branchUsageText(p){
-  const ex=Array.isArray(p.excludedBranches)?p.excludedBranches:[];
+  const ex=[];
+  for(const raw of Array.isArray(p.excludedBranches)?p.excludedBranches:[]){
+    const name=canonicalBranchName(raw);
+    if(name&&!ex.some(x=>sameBranchName(x,name)))ex.push(name);
+  }
   if(!ex.length)return "Используется на всех производствах";
   return "Не используется: "+ex.join(", ");
 }
 function productUsedOnBranch(p,branch){
-  return p&&p.catalogStatus!=="proposal"&&!(p.excludedBranches||[]).includes(branch);
+  return p&&p.catalogStatus!=="proposal"&&!(p.excludedBranches||[]).some(x=>sameBranchName(x,branch));
 }
 function productOrderLinks(p){
   return Array.isArray(p?.orderSuppliers)?p.orderSuppliers.filter(x=>x&&x.supplier):[];
@@ -1706,8 +1710,28 @@ function resolveProductInput(){
   const matches=products.filter(p=>normalize(p.name).includes(value));
   return matches.length===1?matches[0]:null;
 }
+function branchCompareKey(value){
+  const key=normalize(value);
+  if(key==="нуркен"||key==="нуркена")return "нуркена";
+  if(key==="анжерского"||key==="анжерская")return "анжерская";
+  return key;
+}
+function canonicalBranchName(value){
+  const key=branchCompareKey(value);
+  const map={"горняк":"Горняк","лободы":"Лободы","нуркена":"Нуркена","сарань":"Сарань","пришахтинск":"Пришахтинск","ермекова":"Ермекова","анжерская":"Анжерская"};
+  return map[key]||String(value??"").trim();
+}
+function sameBranchName(a,b){return branchCompareKey(a)===branchCompareKey(b)}
 function allBranches(){
-  return [...new Set(db.flatMap(s=>s.schedules.map(r=>r.branch)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ru"));
+  const fixed=["Горняк","Лободы","Нуркена","Пришахтинск","Сарань","Ермекова","Анжерская"];
+  const extra=db.flatMap(s=>(s.schedules||[]).map(r=>r.branch)).filter(Boolean);
+  const out=[],seen=new Set();
+  for(const raw of [...fixed,...extra]){
+    const name=canonicalBranchName(raw),key=branchCompareKey(name);
+    if(!key||seen.has(key))continue;
+    seen.add(key);out.push(name);
+  }
+  return out.sort((a,b)=>a.localeCompare(b,"ru"));
 }
 function refreshOfferSelectors(){
   const sList=document.getElementById("offerSupplierDatalist"),pList=document.getElementById("offerProductDatalist"),branch=document.getElementById("offerBranch");
@@ -2079,7 +2103,7 @@ function comparisonOfferFor(supplierId,productId,branch){
 function comparisonProductUsed(product,branch){
   if(!product)return false;
   if(branch&&branch!=="*")return productUsedOnBranch(product,branch);
-  const branches=["ГОРНЯК","ЛОБОДЫ","НУРКЕН","САРАНЬ","ПРИШАХТИНСК"];
+  const branches=allBranches();
   return branches.some(b=>productUsedOnBranch(product,b));
 }
 function buildComparisonRows(){
@@ -2221,12 +2245,12 @@ function addComparedProductToProduction(productId){
   const branch=document.getElementById("compareBranch")?.value||"*";
   if(branch==="*")return alert("Сначала выберите конкретное производство.");
   const p=productById(productId);if(!p)return;
-  const branches=["ГОРНЯК","ЛОБОДЫ","НУРКЕН","САРАНЬ","ПРИШАХТИНСК"];
+  const branches=allBranches();
   if(p.catalogStatus==="proposal"){
     p.catalogStatus="used";
-    p.excludedBranches=branches.filter(b=>b!==branch);
+    p.excludedBranches=branches.filter(b=>!sameBranchName(b,branch));
   }else{
-    p.excludedBranches=(p.excludedBranches||[]).filter(b=>b!==branch);
+    p.excludedBranches=(p.excludedBranches||[]).filter(b=>!sameBranchName(b,branch));
   }
   const existing=new Set(productOrderLinks(p).map(x=>normalize(x.supplier)));
   supplierOffers.filter(o=>o.productId===productId).forEach(o=>{
@@ -2532,9 +2556,11 @@ function parseStocktakeMessage(text){
 }
 
 function setProductBranchUsage(product,branch,used){
-  const ex=new Set(Array.isArray(product.excludedBranches)?product.excludedBranches:[]);
-  if(used)ex.delete(branch);else ex.add(branch);
-  product.excludedBranches=[...ex];
+  const next=(Array.isArray(product.excludedBranches)?product.excludedBranches:[])
+    .filter(x=>!sameBranchName(x,branch))
+    .map(canonicalBranchName);
+  if(!used)next.push(canonicalBranchName(branch));
+  product.excludedBranches=next.filter((value,index,array)=>value&&array.findIndex(x=>sameBranchName(x,value))===index);
 }
 
 function importStocktakeMessage(){
@@ -2551,7 +2577,7 @@ function importStocktakeMessage(){
 
       stockHistory=stockHistory.filter(x=>!(
         Number(x.productId)===Number(p.id)&&
-        normalize(x.branch)===normalize(snap.branch)&&
+        sameBranchName(x.branch,snap.branch)&&
         String(x.date||"")===snap.date&&
         x.sourceType==="stocktake"
       ));
