@@ -2,10 +2,11 @@
 
 (function(){
   const PO_BRANCHES=["ГОРНЯК","ЛОБОДЫ","НУРКЕН","САРАНЬ","ПРИШАХТИНСК"];
-  const PO_BRANCH_LABELS={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркен","САРАНЬ":"Сарань","ПРИШАХТИНСК":"Пришахтинск"};
+  const PO_BRANCH_LABELS={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркен","НУРКЕНА":"Нуркен","САРАНЬ":"Сарань","ПРИШАХТИНСК":"Пришахтинск"};
   const PO_DAYS=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
   const PO_DAY_SHORT={"Понедельник":"Пн","Вторник":"Вт","Среда":"Ср","Четверг":"Чт","Пятница":"Пт","Суббота":"Сб","Воскресенье":"Вс"};
   const branchLabel=value=>PO_BRANCH_LABELS[String(value??"").trim().toLocaleUpperCase("ru-RU")]||String(value??"").trim();
+  const branchKey=value=>{const key=normalize(value);return key==="нуркена"?"нуркен":key};
   window.displayBranchName=window.displayBranchName||branchLabel;
 
   function removeGeneratedClearControls(root=document){
@@ -95,13 +96,16 @@
     });
   }
   function readScheduleRoot(root){
-    const rows=[];
+    const rows=[],seen=new Set();
     for(const card of root.querySelectorAll(".po-schedule")){
       if(!card.querySelector('[data-key="enabled"]')?.checked)continue;
       const branch=card.querySelector('[data-key="branch"]')?.value.trim()||"";
       const days=key=>[...card.querySelectorAll(`.po-day-picker[data-key="${key}"] .po-day.active`)].map(x=>x.dataset.day).join(", ");
       const order=days("order"),delivery=days("delivery"),note=card.querySelector('[data-key="note"]')?.value.trim()||"";
       if(!branch)throw new Error("Укажите название филиала.");
+      const key=branchKey(branch);
+      if(seen.has(key))throw new Error(`Филиал «${branchLabel(branch)}» указан дважды.`);
+      seen.add(key);
       if(!order)throw new Error(`Для «${branchLabel(branch)}» выберите хотя бы один день заявки.`);
       if(!delivery)throw new Error(`Для «${branchLabel(branch)}» выберите хотя бы один день поставки.`);
       rows.push({branch,order:canonicalDayList(order),delivery:canonicalDayList(delivery),note});
@@ -141,7 +145,7 @@
     if(!supplier){supplier={id:uid("s"),name,contact,phone,schedules:[]};db.push(supplier)}else{supplier.contact=contact;supplier.phone=phone}
     let added=0,updated=0;
     rows.forEach(row=>{
-      const old=supplier.schedules.find(x=>normalize(x.branch)===normalize(row.branch));
+      const old=supplier.schedules.find(x=>branchKey(x.branch)===branchKey(row.branch));
       if(old){Object.assign(old,row);updated++}else{supplier.schedules.push(row);added++}
     });
     saveSuppliers();window.clearSupplierForm();updateBranchFilter();renderSuppliers();
@@ -154,9 +158,9 @@
 
   window.editSupplier=function(si){
     const supplier=db[si];if(!supplier)return;
-    const byBranch=new Map((supplier.schedules||[]).map(r=>[normalize(r.branch),r]));
-    const known=PO_BRANCHES.map(branch=>scheduleCard(branch,byBranch.get(normalize(branch))||null,{enabled:byBranch.has(normalize(branch))}));
-    const custom=(supplier.schedules||[]).filter(r=>!PO_BRANCHES.some(b=>normalize(b)===normalize(r.branch))).map(r=>scheduleCard(r.branch,r,{editableBranch:true,enabled:true}));
+    const byBranch=new Map((supplier.schedules||[]).map(r=>[branchKey(r.branch),r]));
+    const known=PO_BRANCHES.map(branch=>scheduleCard(branch,byBranch.get(branchKey(branch))||null,{enabled:byBranch.has(branchKey(branch))}));
+    const custom=(supplier.schedules||[]).filter(r=>!PO_BRANCHES.some(b=>branchKey(b)===branchKey(r.branch))).map(r=>scheduleCard(r.branch,r,{editableBranch:true,enabled:true}));
     openModal("Редактирование поставщика",`<div id="modalError" class="modal-error"></div>
       <div class="modal-field"><label>Название</label><input id="editSupplierName" value="${esc(supplier.name)}"></div>
       <div class="modal-grid"><div class="modal-field"><label>Контакт</label><input id="editSupplierContact" value="${esc(supplier.contact)}"></div><div class="modal-field"><label>Телефон</label><input id="editSupplierPhone" value="${esc(supplier.phone)}"></div></div>
