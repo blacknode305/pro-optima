@@ -1,0 +1,53 @@
+name: Patch branch stock carryover
+
+on:
+  push:
+    branches: [fix/branch-stock-carryover]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Carry branch stock across supplier changes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch form stock carryover
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('docs/form.html')
+          s=p.read_text()
+          old='''function itemRow(p,x,i){return`<div class="item" data-i="${i}"><div class="p"><b>${esc(p.name)}</b><div class="muted">база: ${esc(p.unit||"—")}</div></div><input class="sq" inputmode="decimal" value="${esc(x.stock??"")}" placeholder="0"><select class="su">${unitOptions(x.stockUnit||p.unit||"")}</select><input class="oq" inputmode="decimal" value="${esc(x.expected??"")}" placeholder="0"><select class="ou">${unitOptions(x.unit||p.unit||"")}</select></div>`}
+function openOrder(id){const r=plan(id);if(!r)return;const o=of(r),old=new Map((o?.items||[]).map(x=>[String(x.productId||x.product),x])),rows=r.items.map((p,i)=>itemRow(p,old.get(String(p.productId))||old.get(p.name)||{},i)).join("");om(r.supplier,'''
+          new='''function itemRow(p,x,i){return`<div class="item" data-i="${i}"><div class="p"><b>${esc(p.name)}</b><div class="muted">база: ${esc(p.unit||"—")}</div></div><input class="sq" inputmode="decimal" value="${esc(x.stock??"")}" placeholder="0"><select class="su">${unitOptions(x.stockUnit||p.unit||"")}</select><input class="oq" inputmode="decimal" value="${esc(x.expected??"")}" placeholder="0"><select class="ou">${unitOptions(x.unit||p.unit||"")}</select></div>`}
+function itemMatchesProduct(x,p){return(x.productId&&Number(x.productId)===Number(p.productId))||norm(x.product||x.name)===norm(p.name)}
+function latestStockForProduct(p,date,skipOrderId){const rows=[];for(const o of(S.orders||[])){if(String(o.id||"")===String(skipOrderId||"")||String(o.stage||"")==="cancelled"||String(o.requestDate||"")>String(date||"9999-12-31"))continue;const it=(o.items||[]).find(x=>itemMatchesProduct(x,p));if(!it||it.stock===undefined||it.stock===null||it.stock==="")continue;rows.push({o,it})}rows.sort((a,b)=>String(b.o.requestDate||"").localeCompare(String(a.o.requestDate||""))||String(b.o.updatedAt||b.o.createdAt||"").localeCompare(String(a.o.updatedAt||a.o.createdAt||"")));return rows[0]?.it||null}
+function orderSeed(p,r,o,old){const current=old.get(String(p.productId))||old.get(p.name);if(current)return current;const snap=latestStockForProduct(p,r.requestDate,o?.id);if(!snap)return{};return{stock:snap.stock,stockUnit:snap.stockUnit||p.unit||"",used:snap.used!==false}}
+function openOrder(id){const r=plan(id);if(!r)return;const o=of(r),old=new Map((o?.items||[]).map(x=>[String(x.productId||x.product),x])),rows=r.items.map((p,i)=>itemRow(p,orderSeed(p,r,o,old),i)).join("");om(r.supplier,'''
+          if s.count(old)!=1:
+              raise SystemExit(f'target count={s.count(old)}')
+          p.write_text(s.replace(old,new))
+
+          scripts=re.findall(r'<script>(.*?)</script>',p.read_text(),re.S)
+          if not scripts:
+              raise SystemExit('inline script not found')
+          Path('/tmp/form-inline.js').write_text(scripts[-1])
+          PY
+          node --check /tmp/form-inline.js
+          git diff --check
+          grep -F 'function latestStockForProduct' docs/form.html
+          grep -F 'orderSeed(p,r,o,old)' docs/form.html
+
+      - name: Commit patch
+        run: |
+          git config user.name "Alexandr"
+          git config user.email "blacknode305@gmail.com"
+          git add docs/form.html
+          git diff --cached --check
+          git commit -m "Carry branch stock across supplier changes"
+          git push
