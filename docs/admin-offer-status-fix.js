@@ -1,49 +1,35 @@
 "use strict";
 
 (function(){
-  const BRANCH_ALIASES={
-    "горняк":["ГОРНЯК","Горняк"],
-    "лободы":["ЛОБОДЫ","Лободы"],
-    "нуркен":["НУРКЕН","Нуркен"],
-    "нуркена":["НУРКЕНА","Нуркена"],
-    "сарань":["САРАНЬ","Сарань"],
-    "пришахтинск":["ПРИШАХТИНСК","Пришахтинск"]
-  };
-
   const norm=value=>String(value??"").trim().toLocaleLowerCase("ru-RU");
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-
-  function branchKeys(branch){
-    const raw=String(branch??"").trim();
-    const key=norm(raw);
-    const out=new Set([raw]);
-    if(raw&&raw!=="*"){
-      out.add(raw.toLocaleUpperCase("ru-RU"));
-      const pretty=raw.charAt(0).toLocaleUpperCase("ru-RU")+raw.slice(1).toLocaleLowerCase("ru-RU");
-      out.add(pretty);
-      (BRANCH_ALIASES[key]||[]).forEach(x=>out.add(x));
-    }
-    return [...out].filter(Boolean);
-  }
+  const canonicalBranch=value=>{
+    const key=norm(value);
+    if(key==="горняк")return "Горняк";
+    if(key==="лободы")return "Лободы";
+    if(key==="нуркен"||key==="нуркена")return "Нуркена";
+    return null;
+  };
 
   function matchingEntry(map,branch){
     if(!map||typeof map!=="object"||Array.isArray(map))return null;
-    const target=norm(branch);
+    const target=canonicalBranch(branch);
+    if(!target)return null;
+    let fallback=null;
     for(const [key,value] of Object.entries(map)){
-      if(norm(key)===target)return [key,value];
+      if(canonicalBranch(key)!==target)continue;
+      if(key===target)return [key,value];
+      fallback=[key,value];
     }
-    return null;
+    return fallback;
   }
 
   function writeBranchOverride(rawMap,branch,value){
     const map=cleanManualActiveByBranch(rawMap);
-    const target=norm(branch);
-    Object.keys(map).forEach(key=>{if(norm(key)===target)delete map[key]});
-    if(value===true||value===false){
-      // Keep aliases intentionally: the existing server used exact branch keys.
-      // This makes old and new branch spellings resolve to the same manual state.
-      branchKeys(branch).forEach(key=>{map[key]=value});
-    }
+    const target=canonicalBranch(branch);
+    if(!target)return map;
+    Object.keys(map).forEach(key=>{if(canonicalBranch(key)===target)delete map[key]});
+    if(value===true||value===false)map[target]=value;
     return map;
   }
 
