@@ -84,14 +84,14 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       appendScript("admin-order-card-history.js?v=20261015-2");
       appendScript("admin-update-safety.js?v=20261015-1");
       installSafeMutationObserver();
-      appendScript("admin-ui-overhaul.js?v=20261016-4",true);
-      appendScript("admin-offer-status-fix.js?v=20261016-2",true);
+      appendScript("admin-ui-overhaul.js?v=20261016-5",true);
+      appendScript("admin-offer-status-fix.js?v=20261016-3",true);
     }
 
     if(page==="operator.html")appendScript("operator-dispatcher-auth.js?v=20261015-1");
     if(page==="form.html")appendScript("form-date-native.js?v=20261015-2");
 
-    appendScript("branch-display.js?v=20261016-3",true);
+    appendScript("branch-display.js?v=20261016-4",true);
     appendScript("realtime.js?v=20261016-5");
   });
 })();

@@ -38,7 +38,7 @@ function nowIso(){ return new Date().toISOString(); }
 function clone(x){ return structuredClone(x); }
 function normalize(s){ return String(s ?? "").trim().toLocaleLowerCase("ru-RU"); }
 function branchKey(s){ const key=normalize(s); return key==="нуркен"||key==="нуркена"?"нуркена":key; }
-function canonicalBranch(s){ const key=branchKey(s); return key==="горняк"?"Горняк":key==="лободы"?"Лободы":key==="нуркена"?"Нуркена":""; }
+function canonicalBranch(s){ const key=branchKey(s); const map={"горняк":"Горняк","лободы":"Лободы","нуркена":"Нуркена","сарань":"Сарань","пришахтинск":"Пришахтинск","ермекова":"Ермекова","анжерская":"Анжерская","анжерского":"Анжерская"}; return map[key]||String(s??"").trim(); }
 function uid(prefix){ return prefix + "_" + Date.now().toString(36) + "_" + crypto.randomBytes(4).toString("hex"); }
 function dateInAlmaty(d = new Date()){
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -232,7 +232,17 @@ function readBody(req){
   });
 }
 
-function branchesFromDb(){ return ["Горняк","Лободы","Нуркена"]; }
+function branchesFromDb(db){
+  const fixed=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
+  const extra=ensureArray(db.suppliers).flatMap(s=>ensureArray(s.schedules).map(x=>String(x.branch||"").trim())).filter(Boolean);
+  const out=[],seen=new Set();
+  for(const branch of [...fixed,...extra]){
+    const key=branchKey(branch);
+    if(!key||seen.has(key))continue;
+    seen.add(key);out.push(branch);
+  }
+  return out;
+}
 function scheduleFor(supplier,branch){
   return ensureArray(supplier?.schedules).find(x=>sameBranch(x.branch,branch))||null;
 }
