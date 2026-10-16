@@ -283,14 +283,21 @@ function productLinks(p){
   return ensureArray(p?.orderSuppliers).filter(x=>x&&(x.supplierId||x.supplier));
 }
 function offerFor(db,supplierId,productId,branch,unit){
+  // Keep operator forms in sync with the admin order planner:
+  // one effective offer per supplier/product. A branch-specific row
+  // overrides the wildcard row regardless of price, and a manually
+  // disabled effective row means this supplier is not eligible.
   const rows=ensureArray(db.offers).filter(o=>
     String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
     (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
   );
-  const same=rows.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
-  const pool=same.length?same:rows;
-  const active=pool.filter(o=>manualSetting(o,branch)!==false);
-  return (active.length?active:pool).sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
+  let effective=null;
+  for(const row of rows){
+    const specific=String(row.branch||"*")!=="*"&&sameBranch(row.branch,branch);
+    if(!effective||specific)effective=row;
+  }
+  if(!effective||manualSetting(effective,branch)===false)return null;
+  return effective;
 }
 function chooseAssignment(db,product,branch,scheduled){
   if(!productUsedOnBranch(product,branch))return null;
@@ -302,7 +309,7 @@ function chooseAssignment(db,product,branch,scheduled){
     const unit=String(link.unit||product.unit||"");
     const o=offerFor(db,s.id,product.id,branch,unit);
     if(!o)return null;
-    return {supplierId:s.id,supplier:s,link,o,orderUnit:unit,priority:Number.isFinite(Number(link.priority))?Number(link.priority):i};
+    return {supplierId:s.id,supplier:s,link,o,orderUnit:unit,priority:Number(link.priority)||0};
   }).filter(Boolean);
   if(!candidates.length)return null;
   const forced=candidates.filter(x=>manualSetting(x.o,branch)===true);
