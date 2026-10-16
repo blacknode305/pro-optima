@@ -1,5 +1,5 @@
 window.PRO_OPTIMA_CONFIG = Object.freeze({
-  API_BASE: "https://pro-optima-api-7f42c9.up.railway.app"
+  API_BASE: "https://pro-optima-production.up.railway.app"
 });
 
 (function(){
