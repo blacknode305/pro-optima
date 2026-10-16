@@ -301,10 +301,12 @@ function offerFor(db,supplierId,productId,branch,unit){
 }
 function chooseAssignment(db,product,branch,scheduled){
   if(!productUsedOnBranch(product,branch))return null;
-  const byId=new Map(scheduled.map(x=>[String(x.s.id),x.s]));
   const byName=new Map(scheduled.map(x=>[normalize(x.s.name),x.s]));
   let candidates=productLinks(product).map((link,i)=>{
-    const s=byId.get(String(link.supplierId||""))||byName.get(normalize(link.supplier));
+    // Admin planner resolves working-table links by supplier name.
+    // Do the same here so stale supplierId values cannot resurrect
+    // a supplier that the admin plan has already excluded.
+    const s=byName.get(normalize(link.supplier));
     if(!s)return null;
     const unit=String(link.unit||product.unit||"");
     const o=offerFor(db,s.id,product.id,branch,unit);
