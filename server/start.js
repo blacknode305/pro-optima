@@ -68,4 +68,5 @@ fs.renameSync=function(src,dst){
   return out;
 };
 
+require("./catalog-import-20261016.js");
 require("./server.js");
