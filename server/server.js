@@ -287,10 +287,18 @@ function offerFor(db,supplierId,productId,branch,unit){
     String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
     (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
   );
-  const same=rows.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
-  const pool=same.length?same:rows;
+  if(!rows.length)return null;
+
+  // Match the admin "Заказник": for a concrete branch the branch-specific
+  // row overrides the wildcard row. Most importantly, an explicit
+  // "Неактивен" is final — never fall back to an inactive offer.
+  const specific=rows.filter(o=>String(o.branch||"*")!=="*"&&sameBranch(o.branch,branch));
+  const effective=specific.length?specific:rows.filter(o=>String(o.branch||"*")==="*");
+  const same=effective.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
+  const pool=same.length?same:effective;
   const active=pool.filter(o=>manualSetting(o,branch)!==false);
-  return (active.length?active:pool).sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
+  if(!active.length)return null;
+  return active.sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
 }
 function chooseAssignment(db,product,branch,scheduled){
   if(!productUsedOnBranch(product,branch))return null;
