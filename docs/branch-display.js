@@ -1,6 +1,6 @@
 "use strict";
 (function(){
-  const MAP={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркен","САРАНЬ":"Сарань","ПРИШАХТИНСК":"Пришахтинск"};
+  const MAP={"ГОРНЯК":"Горняк","ЛОБОДЫ":"Лободы","НУРКЕН":"Нуркена","НУРКЕНА":"Нуркена"};
   const label=v=>MAP[String(v??"").trim().toLocaleUpperCase("ru-RU")]||String(v??"");
   function replaceText(el,pairs){
     if(!el)return;
