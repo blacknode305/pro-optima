@@ -1,0 +1,71 @@
+name: Patch inactive offers out of orders
+
+on:
+  push:
+    branches: [fix/inactive-offer-not-in-order]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Exclude inactive supplier offers from orders'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch backend inactive-offer handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/server.js')
+          s=p.read_text()
+          old='''function offerFor(db,supplierId,productId,branch,unit){
+            const rows=ensureArray(db.offers).filter(o=>
+              String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
+              (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
+            );
+            const same=rows.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
+            const pool=same.length?same:rows;
+            const active=pool.filter(o=>manualSetting(o,branch)!==false);
+            return (active.length?active:pool).sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
+          }'''
+          new='''function offerFor(db,supplierId,productId,branch,unit){
+            const rows=ensureArray(db.offers).filter(o=>
+              String(o.supplierId)===String(supplierId)&&Number(o.productId)===Number(productId)&&
+              (String(o.branch||"*")==="*"||sameBranch(o.branch,branch))
+            );
+            if(!rows.length)return null;
+
+            // Match the admin "Заказник": for a concrete branch the branch-specific
+            // row overrides the wildcard row. Most importantly, an explicit
+            // "Неактивен" is final — never fall back to an inactive offer.
+            const specific=rows.filter(o=>String(o.branch||"*")!=="*"&&sameBranch(o.branch,branch));
+            const effective=specific.length?specific:rows.filter(o=>String(o.branch||"*")==="*");
+            const same=effective.filter(o=>!unit||normalize(offerUnit(o))===normalize(unit));
+            const pool=same.length?same:effective;
+            const active=pool.filter(o=>manualSetting(o,branch)!==false);
+            if(!active.length)return null;
+            return active.sort((a,b)=>(hasPrice(a)?0:1)-(hasPrice(b)?0:1)||Number(a.price||Infinity)-Number(b.price||Infinity))[0]||null;
+          }'''
+          count=s.count(old)
+          if count!=1:
+              raise SystemExit(f'offerFor target count={count}')
+          p.write_text(s.replace(old,new))
+          PY
+
+          node --check server/server.js
+          npm run check
+          git diff --check
+          grep -F 'if(!active.length)return null;' server/server.js
+          grep -F 'const effective=specific.length?specific:rows.filter' server/server.js
+
+      - name: Commit patch
+        run: |
+          git config user.name "Alexandr"
+          git config user.email "blacknode305@gmail.com"
+          git add server/server.js
+          git diff --cached --check
+          git commit -m "Exclude inactive supplier offers from orders"
+          git push
