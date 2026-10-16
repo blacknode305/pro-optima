@@ -24,7 +24,7 @@ jobs:
           def replace(path, old, new, required=True):
               p=Path(path); s=p.read_text()
               if old not in s:
-                  if required: raise SystemExit(f"missing expected text in {path}: {old[:100]!r}")
+                  if required: raise SystemExit(f"missing expected text in {path}: {old[:120]!r}")
                   return False
               p.write_text(s.replace(old,new))
               return True
@@ -63,16 +63,11 @@ jobs:
               'const branchKey=value=>{const key=normalize(value);return key==="нуркена"?"нуркен":key};',
               'const branchKey=value=>{const key=normalize(value);return key==="нуркен"||key==="нуркена"?"нуркена":key};\n  const canonicalBranch=value=>{const key=branchKey(value);return key==="горняк"?"Горняк":key==="лободы"?"Лободы":key==="нуркена"?"Нуркена":""};')
           replace('docs/admin-ui-overhaul.js',
-              '''      const branch=card.querySelector('[data-key="branch"]')?.value.trim()||"";
-              const days=key=>[...card.querySelectorAll(`.po-day-picker[data-key="${key}"] .po-day.active`)].map(x=>x.dataset.day).join(", ");
-              const order=days("order"),delivery=days("delivery"),note=card.querySelector('[data-key="note"]')?.value.trim()||"";
-              if(!branch)throw new Error("Укажите название филиала.");''',
-              '''      const rawBranch=card.querySelector('[data-key="branch"]')?.value.trim()||"";
-              const days=key=>[...card.querySelectorAll(`.po-day-picker[data-key="${key}"] .po-day.active`)].map(x=>x.dataset.day).join(", ");
-              const order=days("order"),delivery=days("delivery"),note=card.querySelector('[data-key="note"]')?.value.trim()||"";
-              if(!rawBranch)throw new Error("Укажите название филиала.");
-              const branch=canonicalBranch(rawBranch);
-              if(!branch)throw new Error("Допустимы только филиалы: Горняк, Лободы, Нуркена.");''')
+              'const branch=card.querySelector(\'[data-key="branch"]\')?.value.trim()||"";',
+              'const rawBranch=card.querySelector(\'[data-key="branch"]\')?.value.trim()||"";\n      const branch=canonicalBranch(rawBranch);')
+          replace('docs/admin-ui-overhaul.js',
+              'if(!branch)throw new Error("Укажите название филиала.");',
+              'if(!rawBranch)throw new Error("Укажите название филиала.");\n      if(!branch)throw new Error("Допустимы только филиалы: Горняк, Лободы, Нуркена.");')
           replace('docs/admin-ui-overhaul.js',
               'const custom=(supplier.schedules||[]).filter(r=>!PO_BRANCHES.some(b=>branchKey(b)===branchKey(r.branch))).map(r=>scheduleCard(r.branch,r,{editableBranch:true,enabled:true}));',
               'const custom=[];')
