@@ -1,0 +1,48 @@
+name: Patch order plan supplier link parity
+
+on:
+  push:
+    branches: [fix/order-plan-form-parity]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Match supplier link selection to admin planner'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch supplier candidate selection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/server.js')
+          s=p.read_text()
+          old='''  const byId=new Map(scheduled.map(x=>[String(x.s.id),x.s]));
+            const byName=new Map(scheduled.map(x=>[normalize(x.s.name),x.s]));
+            let candidates=productLinks(product).map((link,i)=>{
+              const s=byId.get(String(link.supplierId||""))||byName.get(normalize(link.supplier));'''
+          new='''  const byName=new Map(scheduled.map(x=>[normalize(x.s.name),x.s]));
+            let candidates=productLinks(product).map((link,i)=>{
+              // Admin planner resolves working-table links by supplier name.
+              // Do the same here so stale supplierId values cannot resurrect
+              // a supplier that the admin plan has already excluded.
+              const s=byName.get(normalize(link.supplier));'''
+          if s.count(old)!=1:
+              raise SystemExit(f'candidate target count={s.count(old)}')
+          p.write_text(s.replace(old,new))
+          PY
+          node --check server/server.js
+          npm run check
+          git diff --check
+          grep -F 'const s=byName.get(normalize(link.supplier));' server/server.js
+      - name: Commit patch
+        run: |
+          git config user.name "Alexandr"
+          git config user.email "blacknode305@gmail.com"
+          git add server/server.js
+          git commit -m "Match supplier link selection to admin planner"
+          git push
