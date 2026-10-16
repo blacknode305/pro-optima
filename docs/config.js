@@ -89,7 +89,10 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
     }
 
     if(page==="operator.html")appendScript("operator-dispatcher-auth.js?v=20261015-1");
-    if(page==="form.html")appendScript("form-date-native.js?v=20261015-2");
+    if(page==="form.html"){
+      appendScript("form-date-native.js?v=20261015-2");
+      appendScript("form-stock-carryover.js?v=20261016-1",true);
+    }
 
     appendScript("branch-display.js?v=20261016-4",true);
     appendScript("realtime.js?v=20261016-5");
