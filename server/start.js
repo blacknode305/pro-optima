@@ -6,6 +6,7 @@ const path=require("path");
 const {WebSocketServer,WebSocket}=require("ws");
 const {handleExtraApi}=require("./date-access.js");
 const {handle:handleDispatcherApi}=require("./dispatcher.js");
+const {runBranchCanonicalMigration}=require("./branch-canonical-migration.js");
 
 const DATA_DIR=process.env.SOPTIMA_DATA_DIR||"/var/data";
 const META_FILE=path.join(DATA_DIR,"meta.json");
@@ -31,6 +32,8 @@ function blockLegacySupplierUpdate(req,res,url){
   res.end(payload);
   return true;
 }
+
+runBranchCanonicalMigration();
 
 const originalCreateServer=http.createServer.bind(http);
 http.createServer=function(...args){
