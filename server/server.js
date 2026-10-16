@@ -436,6 +436,26 @@ function filterOrderItemsToPlan(items,plan){
     return (Number.isFinite(id)&&id>0&&allowedIds.has(id))||allowedNames.has(normalize(item.product));
   });
 }
+function excludeUnusedProductsForBranch(db,branch,items){
+  let changed=0;
+  for(const item of ensureArray(items)){
+    if(item?.used!==false&&item?.stock!=="-")continue;
+    const product=ensureArray(db.products).find(p=>
+      (item.productId!==null&&item.productId!==undefined&&String(p.id)===String(item.productId))||
+      ((!item.productId)&&normalize(p.name)===normalize(item.product))
+    );
+    if(!product)continue;
+    const next=[];
+    for(const raw of ensureArray(product.excludedBranches)){
+      const name=canonicalBranch(raw);
+      if(name&&!next.some(x=>sameBranch(x,name)))next.push(name);
+    }
+    const canonical=canonicalBranch(branch);
+    if(canonical&&!next.some(x=>sameBranch(x,canonical))){next.push(canonical);changed++}
+    product.excludedBranches=next;
+  }
+  return changed;
+}
 const STAGE_RANK={draft:0,sent:1,confirmed:2,expected:2,done:3,cancelled:3};
 function canSetStage(oldStage,newStage){
   if(!STAGE_RANK.hasOwnProperty(newStage))return false;
@@ -648,6 +668,11 @@ async function api(req,res,pathname){
         if(order && !canSetStage(order.stage,stage))return send(res,409,{error:"Недопустимый переход статуса."},cors);
         const plan=allowedPlan.find(x=>String(x.supplierId)===String(supplier.id));
         const items=filterOrderItemsToPlan(body.items,plan);
+        // A dash in branch stock means the product is not used by this branch at all.
+        // Persist that branch-level exclusion so it disappears from the admin orderbook
+        // and from every future supplier order for this branch. Supplier inactivity is
+        // separate and only changes which supplier receives an otherwise active product.
+        excludeUnusedProductsForBranch(db,branch,items);
         if(!order){
           order={
             id:uid("ord"),requestDate,deliveryDate:String(body.deliveryDate||plan?.deliveryDate||requestDate),
