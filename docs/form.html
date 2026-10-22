@@ -55,7 +55,7 @@ async function start(){$("login").style.display="none";$("app").style.display="b
 async function load(){S=await api("/api/operator/bootstrap");branch=S.branch;localStorage.setItem(BK,branch);$("bn").textContent=branch;$("tl").textContent=`${S.dayName}, ${fd(S.today)}`;$("on").textContent=`rev ${S.revision}`;render()}
 function show(x){$("vo").classList.toggle("active",x==="o");$("vr").classList.toggle("active",x==="r");$("to").classList.toggle("active",x==="o");$("tr").classList.toggle("active",x==="r")}
 function of(r){return(S.orders||[]).find(o=>o.requestDate===r.requestDate&&((o.supplierId&&String(o.supplierId)===String(r.supplierId))||norm(o.supplier)===norm(r.supplier)))}
-const FORM_STATUS_GROUPS=[{"key":"new","label":"Не поданы","hint":"Нужно заполнить и отправить"},{"key":"sent","label":"Поданы","hint":"Уже отправлены"},{"key":"waiting","label":"Ожидаются","hint":"Подтверждены и ожидают поставки"},{"key":"done","label":"Приняты","hint":"Поставка завершена"},{"key":"other","label":"Другие статусы","hint":"Требуют проверки"}];
+const FORM_STATUS_GROUPS=[{"key":"new","label":"Не поданы","hint":"Нужно заполнить и отправить"},{"key":"sent","label":"Поданы","hint":"Уже отправлены"},{"key":"waiting","label":"Подтверждены оператором","hint":"Заявки подтверждены оператором"},{"key":"done","label":"Приняты","hint":"Поставка завершена"},{"key":"other","label":"Другие статусы","hint":"Требуют проверки"}];
 const FORM_GROUP_OPEN={new:true,sent:false,waiting:true,done:false,other:false};
 function formGroupKey(st){
  if(!st||st==="new")return "new";
@@ -65,7 +65,7 @@ function formGroupKey(st){
  return "other";
 }
 function formStatusText(st){
- return {new:"Не заполнена",sent:"Заявка подана",confirmed:"Ожидается",expected:"Ожидается",done:"Принято",received:"Получена",cancelled:"Отменена"}[st]||String(st||"Не заполнена");
+ return {new:"Не заполнена",sent:"Заявка подана",confirmed:"Подтверждена оператором",expected:"Подтверждена оператором",done:"Принято",received:"Получена",cancelled:"Отменена"}[st]||String(st||"Не заполнена");
 }
 function render(){
   const rows=Array.isArray(S?.plan)?S.plan:[];
@@ -89,7 +89,7 @@ function render(){
     grouped[formGroupKey(st)].push({r:null,o,st,archived:true});
   });
   const total=Object.values(grouped).reduce((s,a)=>s+a.length,0);
-  $("so").innerHTML=`<span class="chip">На дату: ${total}</span><span class="chip">Не поданы: ${grouped.new.length}</span><span class="chip">Поданы: ${grouped.sent.length}</span><span class="chip">Ожидаются: ${grouped.waiting.length}</span><span class="chip">Приняты: ${grouped.done.length}</span>`;
+  $("so").innerHTML=`<span class="chip">На дату: ${total}</span><span class="chip">Не поданы: ${grouped.new.length}</span><span class="chip">Поданы: ${grouped.sent.length}</span><span class="chip">Подтверждены оператором: ${grouped.waiting.length}</span><span class="chip">Приняты: ${grouped.done.length}</span>`;
   $("lo").innerHTML=`<div class="status-info-banner">Заявки по выбранной дате сгруппированы по статусам. Нажми на заголовок группы, чтобы раскрыть или скрыть её.</div>`+
     FORM_STATUS_GROUPS.map(g=>{
       const cards=grouped[g.key].map(({r,o,st,archived})=>{
@@ -105,7 +105,7 @@ function render(){
   $("lo").querySelectorAll(".status-group").forEach(el=>el.addEventListener("toggle",()=>{FORM_GROUP_OPEN[el.dataset.statusGroup]=el.open}));
   const rec=(S.orders||[]).filter(o=>["confirmed","expected"].includes(o.stage)&&o.deliveryDate===S.today);
   $("sr").innerHTML=`<span class="chip">Поставки сегодня: ${rec.length}</span>`;
-  $("lr").innerHTML=rec.length?rec.map(o=>`<div class="card order-status-waiting"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status status-waiting">Ожидается</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>';
+  $("lr").innerHTML=rec.length?rec.map(o=>`<div class="card order-status-waiting"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status status-waiting">Подтверждена оператором</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>';
 }
 function plan(id){return(S.plan||[]).find(x=>String(x.supplierId)===String(id))}function ord(id){return(S.orders||[]).find(x=>String(x.id)===String(id))}function om(t,b,f=""){$("mt").textContent=t;$("mb").innerHTML=b;$("mf").innerHTML=f;$("ov").classList.add("open")}function cm(){$("ov").classList.remove("open")}
 function itemRow(p,x,i){return`<div class="item" data-i="${i}"><div class="p"><b>${esc(p.name)}</b><div class="muted">база: ${esc(p.unit||"—")}</div></div><input class="sq" inputmode="decimal" value="${esc(x.stock??"")}" placeholder="0"><select class="su">${unitOptions(x.stockUnit||p.unit||"")}</select><input class="oq" inputmode="decimal" value="${esc(x.expected??"")}" placeholder="0"><select class="ou">${unitOptions(x.unit||p.unit||"")}</select></div>`}
