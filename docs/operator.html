@@ -18,6 +18,36 @@
   .app .brand{font-size:15px}
   .modal .edit-row input,.modal .edit-row select,.modal .receive-row input,.modal .receive-row select{font-size:12px}
 }
+
+
+/* Status colors and collapsible order groups. */
+.status-group{border:1px solid #d9e2e7;border-radius:12px;margin:0 0 10px;background:#fff;overflow:hidden}
+.status-group summary{display:flex;align-items:center;gap:9px;flex-wrap:wrap;cursor:pointer;list-style:none;padding:13px 12px;min-height:48px;user-select:none;background:var(--tone-bg,#f7f9fa);color:var(--tone,#46545b)}
+.status-group summary::-webkit-details-marker{display:none}
+.status-group summary::after{content:"⌄";font-size:20px;font-weight:750;line-height:1;margin-left:auto;transform:rotate(0deg);transition:transform .16s ease}
+.status-group[open] summary::after{transform:rotate(180deg)}
+.status-group summary:focus-visible{outline:3px solid #719abe;outline-offset:-3px}
+.status-group-title{font-size:14px;font-weight:850}
+.status-group-count{font-size:12px;font-weight:850;border-radius:50px;padding:3px 9px;background:#fff;border:1px solid var(--tone-line,#d9e2e7);color:var(--tone,#46545b)}
+.status-group-hint{font-size:11px;flex:1 1 100%;color:#667781;line-height:1.3;order:3}
+.status-group-content{padding:9px;background:#fbfcfd;border-top:1px solid var(--tone-line,#e3eaee)}
+.status-group-content .card{margin:0 0 8px}
+.status-group-content .card:last-child{margin-bottom:0}
+.status-group-empty{padding:13px 8px;text-align:center;color:#75848d;font-size:12px}
+.group-new,.group-received,.order-status-new,.status-new,.card.received{--tone:#9c541e;--tone-bg:#fff2e6;--tone-line:#eed0ad}
+.group-sent,.order-status-sent,.status-sent,.card.sent{--tone:#285d9b;--tone-bg:#e9f3ff;--tone-line:#bfd8f3}
+.group-waiting,.order-status-waiting,.status-waiting,.card.confirmed,.card.expected{--tone:#6552a2;--tone-bg:#f1eeff;--tone-line:#d6cef7}
+.group-done,.order-status-done,.status-done,.card.done{--tone:#247248;--tone-bg:#e8f6ec;--tone-line:#b9dec6}
+.group-other,.order-status-other,.status-other,.card.cancelled{--tone:#626d75;--tone-bg:#edf1f3;--tone-line:#d0d9de}
+.card[class*="order-status-"]{border-left:4px solid var(--tone);padding-left:9px}
+.card .status{background:var(--tone-bg,#edf1f3);color:var(--tone,#4c5b63);border:1px solid var(--tone-line,#d0d9de);font-size:11px;font-weight:850;padding:5px 8px;border-radius:9px;text-align:center;white-space:normal;max-width:47%;line-height:1.3}
+@media(max-width:520px){.status-group summary{padding:10px 11px}.status-group-content{padding:7px}.status-group-title{font-size:13px}.status-group-hint{font-size:10px}}
+
+.card.received{border-left-color:var(--tone)}
+.card.sent{border-left-color:var(--tone)}
+.card.confirmed,.card.expected{border-left-color:var(--tone)}
+.card.done{border-left-color:var(--tone)}
+.card.cancelled{border-left-color:var(--tone)}
 </style>
 </head>
 <body>
@@ -41,7 +71,30 @@ function fillBranches(){const el=$("branch"),cur=el.value;el.innerHTML='<option 
 function stage(o){return String(o.stage||"received")}function stageText(o){return{received:"Получена",sent:"Ждёт подтверждения",confirmed:"Ожидается",expected:"Ожидается",done:"Исполнено",cancelled:"Отменено"}[stage(o)]||stage(o)}
 function rows(){const b=$("branch").value,st=$("status").value,date=$("date").value,q=norm($("search").value),today=isoToday();let arr=[...(DB?.history||[])];if(b)arr=arr.filter(x=>norm(x.branch)===norm(b));if(st==="active")arr=arr.filter(x=>!["done","cancelled"].includes(stage(x)));else if(st)arr=arr.filter(x=>stage(x)===st||(st==="confirmed"&&stage(x)==="expected"));if(date)arr=arr.filter(x=>x.requestDate===date||x.deliveryDate===date);if(currentTab==="d")arr=arr.filter(x=>["confirmed","expected"].includes(stage(x))&&x.deliveryDate===today);if(currentTab==="h")arr=arr.filter(x=>stage(x)==="done");if(currentTab==="a")arr=arr.filter(x=>stage(x)!=="done"&&stage(x)!=="cancelled");if(q)arr=arr.filter(x=>[x.branch,x.supplier,...(x.items||[]).map(i=>i.product)].some(v=>norm(v).includes(q)));return arr.sort((a,b)=>String(b.requestDate||"").localeCompare(String(a.requestDate||""))||String(b.createdAt||"").localeCompare(String(a.createdAt||"")))}
 function tab(x){currentTab=x;for(const n of["a","d","h"])$("t"+n).classList.toggle("active",n===x);if(x==="a")$("status").value="active";if(x==="d")$("status").value="";if(x==="h")$("status").value="done";render()}
-function render(){if(!DB)return;const all=DB.history||[],today=isoToday(),r=rows(),active=all.filter(x=>["received","sent","confirmed","expected"].includes(stage(x))).length,del=all.filter(x=>["confirmed","expected"].includes(stage(x))&&x.deliveryDate===today).length;$("summary").innerHTML=`<span class="chip">Показано: ${r.length}</span><span class="chip">Активных: ${active}</span><span class="chip">Поставки сегодня: ${del}</span>`;$("list").innerHTML=r.length?r.map(card).join(""):'<div class="empty">Заявок по выбранным условиям нет.</div>'}
+const OPERATOR_STATUS_GROUPS=[{"key":"received","label":"Не отправлены","hint":"Требуют отправки поставщику"},{"key":"sent","label":"Поданы поставщику","hint":"Отправлены, ждут подтверждения"},{"key":"waiting","label":"Ожидаются","hint":"Поставки и приёмка"},{"key":"done","label":"Исполнены","hint":"Завершённые заявки"},{"key":"other","label":"Другие статусы","hint":"Отменённые и нестандартные"}];
+const OPERATOR_GROUP_OPEN={received:true,sent:false,waiting:true,done:true,other:false};
+function operatorGroupKey(st){
+ if(st==="received"||st==="new")return "received";
+ if(st==="sent")return "sent";
+ if(st==="confirmed"||st==="expected")return "waiting";
+ if(st==="done")return "done";
+ return "other";
+}
+function render(){
+ if(!DB)return;
+ const all=DB.history||[],today=isoToday(),r=rows(),active=all.filter(x=>["received","sent","confirmed","expected"].includes(stage(x))).length,del=all.filter(x=>["confirmed","expected"].includes(stage(x))&&x.deliveryDate===today).length;
+ $("summary").innerHTML=`<span class="chip">Показано: ${r.length}</span><span class="chip">Активных: ${active}</span><span class="chip">Поставки сегодня: ${del}</span>`;
+ if(!r.length){
+   $("list").innerHTML='<div class="empty">Заявок по выбранным условиям нет.</div>';
+   return;
+ }
+ const grouped={received:[],sent:[],waiting:[],done:[],other:[]};
+ r.forEach(o=>grouped[operatorGroupKey(stage(o))].push(o));
+ $("list").innerHTML=OPERATOR_STATUS_GROUPS.filter(g=>grouped[g.key].length).map(g=>
+   `<details class="status-group group-${g.key}" data-status-group="${g.key}" ${OPERATOR_GROUP_OPEN[g.key]?"open":""}><summary><span class="status-group-title">${g.label}</span><span class="status-group-count">${grouped[g.key].length}</span><span class="status-group-hint">${g.hint}</span></summary><div class="status-group-content">${grouped[g.key].map(card).join("")}</div></details>`
+ ).join("");
+ $("list").querySelectorAll(".status-group").forEach(el=>el.addEventListener("toggle",()=>{OPERATOR_GROUP_OPEN[el.dataset.statusGroup]=el.open}));
+}
 function card(o){const st=stage(o),n=(o.items||[]).filter(x=>x.used!==false&&Number(x.expected??0)>0).length;let acts=`<button onclick="openEdit('${esc(o.id)}')">Редактировать</button><button onclick="copyOrder('${esc(o.id)}')">Копировать заявку</button>`;if(st==="received")acts+=`<button class="primary" onclick="sendSupplier('${esc(o.id)}')">WhatsApp поставщику</button>`;if(st==="sent")acts+=`<button onclick="sendSupplier('${esc(o.id)}')">Повторить WhatsApp</button><button class="primary" onclick="openConfirm('${esc(o.id)}')">Подтвердить отгрузку</button>`;if(["confirmed","expected"].includes(st))acts+=`<button class="primary" onclick="openReceive('${esc(o.id)}')">Принять поставку</button>`;return`<div class="card ${st}"><div class="top"><div><div class="title">${esc(o.branch)} · ${esc(o.supplier)}</div><div class="meta">Заявка ${fd(o.requestDate)} → поставка ${fd(o.deliveryDate)} · ${n} поз.</div></div><span class="status">${esc(stageText(o))}</span></div><div class="actions">${acts}</div></div>`}
 function order(id){return(DB?.history||[]).find(x=>String(x.id)===String(id))}
 function supplierByName(name){const n=norm(name);return(DB?.suppliers||[]).find(s=>norm(s.name)===n)||(DB?.suppliers||[]).find(s=>norm(s.name).includes(n)||n.includes(norm(s.name)))||null}
