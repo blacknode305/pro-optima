@@ -866,6 +866,13 @@ html[data-theme="dark"] .catalog-row.unlinked{background:#302b20}html[data-theme
 
   <section class="card">
     <h2>История заявок и ожидаемые поставки</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:11px 12px;margin:10px 0 14px;border:1px solid #e5c2c2;border-radius:10px;background:#fff8f8">
+      <div style="flex:1;min-width:220px">
+        <b style="color:#813333">Полная очистка истории заявок</b>
+        <div class="muted">Удаляет все заявки всех производств, включая активные. Товары, цены, поставщики и остатки сохраняются. Сначала скачивается копия всей базы.</div>
+      </div>
+      <button type="button" id="clearAllHistoryButton" class="danger" onclick="clearAllHistoryFromAdmin()">Удалить всю историю заявок</button>
+    </div>
     <div class="muted">Вставьте сообщение от производства. Остатки сразу попадут в базу остатков, а заказ создаст заявку поставщику. После подтверждения заявка станет ожидаемой поставкой.</div>
     <label>Сообщение заявки</label>
     <textarea id="historyPaste" class="history-paste" placeholder="Вставьте сюда сообщение, которое прислало производство..."></textarea>
@@ -3368,6 +3375,76 @@ function saveCatalogLink(catId){
   saveCatalog();saveProducts();saveOffers();closeModal();renderProposals();renderSupplierOffers();renderPriceComparison();
 }
 
+
+let historyClearInProgress=false;
+async function clearAllHistoryFromAdmin(){
+  if(historyClearInProgress)return;
+  const button=document.getElementById("clearAllHistoryButton");
+  historyClearInProgress=true;
+  if(button)button.disabled=true;
+  try{
+    if(!adminToken()){
+      setAdminTokenPrompt();
+      if(!adminToken())return;
+    }
+    if(!REMOTE_READY||remoteSaving||remotePending.size){
+      throw new Error("Есть несохранённые изменения. Дождитесь синхронизации с Railway и повторите.");
+    }
+    const fresh=await remoteFetch("/api/admin/db");
+    const data=fresh.data;
+    if(!data||!Array.isArray(data.history)||!Array.isArray(data.suppliers)||!Array.isArray(data.products)){
+      throw new Error("Некорректный ответ базы. Очистка отменена.");
+    }
+    const count=data.history.length;
+    if(count===0){
+      orderHistory=[];
+      localStorage.setItem(HISTORY_KEY,"[]");
+      await reloadRemote();
+      show("historyMsg","История заявок уже пуста на Railway.","ok");
+      return;
+    }
+    if(!confirm("Удалить ВСЕ "+count+" заявок из Railway, включая активные и ожидаемые? Товары, поставщики, остатки и настройки останутся. Далее будет создана резервная копия."))return;
+    const backupText=JSON.stringify(data,null,2);
+    const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+    const filename="PRO_OPTIMA_before_history_clear_"+stamp+"_rev"+fresh.revision+".json";
+    const backupBlob=new Blob([backupText],{type:"application/json;charset=utf-8"});
+    const backupUrl=URL.createObjectURL(backupBlob);
+    const link=document.createElement("a");
+    link.href=backupUrl;link.download=filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(backupUrl),60000);
+    if(!confirm("Файл "+filename+" отправлен на скачивание. Проверьте, что он действительно сохранён. Продолжить удаление?"))return;
+    const phrase=prompt("Для окончательного удаления всех "+count+" заявок введите УДАЛИТЬ:");
+    if(phrase===null)return;
+    if(phrase.trim()!=="УДАЛИТЬ"){
+      show("historyMsg","Очистка отменена: контрольная фраза не совпала.","err");
+      return;
+    }
+    const out=await remoteFetch("/api/admin/db",{
+      method:"PATCH",
+      body:JSON.stringify({baseRevision:fresh.revision,changes:{history:[]}})
+    });
+    const verify=await remoteFetch("/api/admin/db");
+    if(!Array.isArray(verify.data?.history)||verify.data.history.length!==0){
+      throw new Error("После запроса контрольная проверка не подтвердила пустую историю.");
+    }
+    orderHistory=[];
+    localStorage.setItem(HISTORY_KEY,"[]");
+    remotePending.delete("history");
+    REMOTE_REVISION=verify.revision;
+    await reloadRemote();
+    show("historyMsg","Удалено заявок: "+count+". История Railway пуста (ревизия "+out.revision+"). Резервная копия: "+filename+".","ok");
+  }catch(e){
+    const msg=e?.status===409?"Версия базы изменилась во время очистки. Обновите админку и повторите.":String(e?.message||e);
+    show("historyMsg","Очистка не выполнена или не подтверждена: "+msg,"err");
+    console.error(e);
+  }finally{
+    historyClearInProgress=false;
+    if(button)button.disabled=false;
+  }
+}
 async function exportServerDatabase(){
   if(!adminToken()){setAdminTokenPrompt();if(!adminToken())return}
   try{
