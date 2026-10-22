@@ -45,6 +45,17 @@
 /* Read-only inspection of confirmed production requests. */
 .item.readonly-order-row .readonly-value{min-height:34px;display:flex;align-items:center;justify-content:center;padding:6px 3px;border-radius:7px;background:#f4f7f9;color:#3d4e58;font-size:13px;overflow-wrap:anywhere;text-align:center}
 .item.readonly-order-row .p b{font-size:13px}
+
+/* Structured header in read-only order viewer. */
+.order-view-summary{padding:12px;margin-bottom:12px;border:1px solid #d9e5ec;border-radius:12px;background:#f6f9fb}
+.order-view-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.order-view-date{display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px;background:#fff;border:1px solid #e1e9ee;border-radius:9px}
+.order-view-date-label,.order-view-label{font-size:11px;font-weight:650;color:#6b7a83}
+.order-view-date strong{font-size:14px;color:#263943;line-height:1.3;overflow-wrap:anywhere}
+.order-view-status{display:flex;align-items:flex-start;flex-direction:column;gap:6px;margin-top:11px;min-width:0}
+.order-view-badge{display:inline-block;max-width:100%;font-size:13px;line-height:1.4;font-weight:800;padding:7px 10px;border-radius:9px;white-space:normal;overflow-wrap:anywhere;background:var(--tone-bg,#edf1f3);color:var(--tone,#40515e);border:1px solid var(--tone-line,#ced8df)}
+.order-view-note{margin-top:10px;font-size:11px;line-height:1.45;color:#697982}
+.mh #mt{min-width:0;overflow-wrap:anywhere}
 </style></head><body>
 <div id="login" class="login"><div class="loginbox"><div class="brand">PRO OPTIMA · Производство</div><p class="muted">Сегодняшний список заявок и приёмка поставок по настройкам администратора.</p><label>Производство</label><select id="lb"><option>Лободы</option><option>Нуркена</option><option>Горняк</option><option>Пришахтинск</option><option>Сарань</option><option>Ермекова</option><option>Анжерская</option></select><label>PIN производства</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"><button class="primary full" style="margin-top:11px" onclick="login()">Войти</button><div id="lm"></div></div></div>
 <div id="app" class="app" style="display:none"><header><div class="head"><div><div class="brand">PRO OPTIMA · <span id="bn"></span></div><div id="tl" class="muted"></div></div><div><span id="on" class="online">...</span><button style="border:0;background:transparent;padding:4px" onclick="logout()">Сменить</button></div></div><div class="tabs"><button id="to" class="active" onclick="show('o')">Заявки сегодня</button><button id="tr" onclick="show('r')">Поставки сегодня</button></div></header><main><section id="vo" class="view active"><div id="so" class="summary"></div><div id="lo"></div></section><section id="vr" class="view"><div id="sr" class="summary"></div><div id="lr"></div></section></main></div>
@@ -91,7 +102,7 @@ function openOrderView(id){
     if(x.delivered!==undefined&&x.delivered!==null)extra.push("Принято: "+esc(x.delivered)+" "+esc(x.deliveredUnit||x.unit||""));
     return `<div class="item readonly-order-row"><div class="p"><b>${esc(x.product||x.name||"Товар")}</b>${unused?'<div class="muted">Не используется</div>':""}${extra.length?`<div class="muted">${extra.join(" · ")}</div>`:""}</div><div class="readonly-value">${esc(stock)}</div><div class="readonly-value">${unused?"—":esc(x.stockUnit||x.unit||"—")}</div><div class="readonly-value">${esc(ordered)}</div><div class="readonly-value">${unused?"—":esc(x.unit||"—")}</div></div>`;
   }).join("");
-  om("Просмотр · "+(o.supplier||"Заявка"),`<div class="notice">Заявка ${fd(o.requestDate)} · поставка ${fd(o.deliveryDate)}. <span class="status status-${key}">${esc(formStatusText(o.stage))}</span><div style="margin-top:5px">Режим просмотра — изменение количества недоступно.</div></div><div class="item-head"><div>Товар</div><div>Ост.</div><div>Ед.</div><div>Заказ</div><div>Ед.</div></div>${lines||'<div class="empty">В заявке нет товаров.</div>'}`,`<button class="primary" onclick="cm()">Закрыть</button>`);
+  om("Просмотр · "+(o.supplier||"Заявка"),`<div class="order-view-summary group-${key}"><div class="order-view-dates"><div class="order-view-date"><span class="order-view-date-label">Дата заявки</span><strong>${fd(o.requestDate)}</strong></div><div class="order-view-date"><span class="order-view-date-label">Дата поставки</span><strong>${fd(o.deliveryDate)}</strong></div></div><div class="order-view-status"><span class="order-view-label">Статус заявки</span><span class="order-view-badge">${esc(formStatusText(o.stage))}</span></div><div class="order-view-note">Режим просмотра — изменение количества недоступно.</div></div><div class="item-head"><div>Товар</div><div>Ост.</div><div>Ед.</div><div>Заказ</div><div>Ед.</div></div>${lines||'<div class="empty">В заявке нет товаров.</div>'}`,`<button class="primary" onclick="cm()">Закрыть</button>`);
 }
 function render(){
   const rows=Array.isArray(S?.plan)?S.plan:[];
