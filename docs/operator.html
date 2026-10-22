@@ -57,6 +57,17 @@
 .readonly-order-values span{font-size:10px;color:#70808a}
 .readonly-order-values strong{font-size:13px;overflow-wrap:anywhere}
 @media(max-width:560px){.readonly-order-values{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Structured header in read-only order viewer. */
+.order-view-summary{padding:12px;margin-bottom:12px;border:1px solid #d9e5ec;border-radius:12px;background:#f6f9fb}
+.order-view-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.order-view-date{display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px;background:#fff;border:1px solid #e1e9ee;border-radius:9px}
+.order-view-date-label,.order-view-label{font-size:11px;font-weight:650;color:#6b7a83}
+.order-view-date strong{font-size:14px;color:#263943;line-height:1.3;overflow-wrap:anywhere}
+.order-view-status{display:flex;align-items:flex-start;flex-direction:column;gap:6px;margin-top:11px;min-width:0}
+.order-view-badge{display:inline-block;max-width:100%;font-size:13px;line-height:1.4;font-weight:800;padding:7px 10px;border-radius:9px;white-space:normal;overflow-wrap:anywhere;background:var(--tone-bg,#edf1f3);color:var(--tone,#40515e);border:1px solid var(--tone-line,#ced8df)}
+.order-view-note{margin-top:10px;font-size:11px;line-height:1.45;color:#697982}
+.mh #mt{min-width:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -113,7 +124,7 @@ function openOrderView(id){
     const value=(v,u)=>v===undefined||v===null||v===""?"—":esc(String(v))+(u?" "+esc(u):"");
     return `<div class="readonly-order-item"><div class="readonly-order-name"><b>${esc(x.product||"Товар")}</b>${unused?'<span class="muted"> · не используется</span>':""}</div><div class="readonly-order-values"><div><span>Остаток</span><strong>${unused?"—":value(x.stock,stockUnit)}</strong></div><div><span>Заказ</span><strong>${unused?"—":value(x.expected,itemUnit)}</strong></div><div><span>Подтверждено</span><strong>${unused?"—":value(x.confirmed,itemUnit)}</strong></div><div><span>Пришло</span><strong>${unused?"—":value(x.delivered,x.deliveredUnit||itemUnit)}</strong></div></div></div>`;
   }).join("");
-  openModal("Просмотр · "+(o.branch||"")+" · "+(o.supplier||""),`<div class="notice">Заявка ${fd(o.requestDate)} → поставка ${fd(o.deliveryDate)}. Статус: <b>${esc(stageText(o))}</b><div style="margin-top:5px">Только просмотр — редактирование отключено.</div></div>${lines||'<div class="empty">В заявке нет товаров.</div>'}`,`<button class="primary" onclick="closeModal()">Закрыть</button>`);
+  openModal("Просмотр · "+(o.branch||"")+" · "+(o.supplier||""),`<div class="order-view-summary group-${operatorGroupKey(stage(o))}"><div class="order-view-dates"><div class="order-view-date"><span class="order-view-date-label">Дата заявки</span><strong>${fd(o.requestDate)}</strong></div><div class="order-view-date"><span class="order-view-date-label">Дата поставки</span><strong>${fd(o.deliveryDate)}</strong></div></div><div class="order-view-status"><span class="order-view-label">Статус заявки</span><span class="order-view-badge">${esc(stageText(o))}</span></div><div class="order-view-note">Только просмотр — редактирование отключено.</div></div>${lines||'<div class="empty">В заявке нет товаров.</div>'}`,`<button class="primary" onclick="closeModal()">Закрыть</button>`);
 }
 function card(o){const st=stage(o),n=(o.items||[]).filter(x=>x.used!==false&&Number(x.expected??0)>0).length;let acts=isReadOnlyOrder(o)?`<button onclick="openOrderView('${esc(o.id)}')">Просмотреть</button>`:`<button onclick="openEdit('${esc(o.id)}')">Редактировать</button><button onclick="copyOrder('${esc(o.id)}')">Копировать заявку</button>`;if(st==="received")acts+=`<button class="primary" onclick="sendSupplier('${esc(o.id)}')">WhatsApp поставщику</button>`;if(st==="sent")acts+=`<button onclick="sendSupplier('${esc(o.id)}')">Повторить WhatsApp</button><button class="primary" onclick="openConfirm('${esc(o.id)}')">Подтвердить отгрузку</button>`;if(["confirmed","expected"].includes(st))acts+=`<button class="primary" onclick="openReceive('${esc(o.id)}')">Принять поставку</button>`;return`<div class="card ${st}"><div class="top"><div><div class="title">${esc(o.branch)} · ${esc(o.supplier)}</div><div class="meta">Заявка ${fd(o.requestDate)} → поставка ${fd(o.deliveryDate)} · ${n} поз.</div></div><span class="status">${esc(stageText(o))}</span></div><div class="actions">${acts}</div></div>`}
 function order(id){return(DB?.history||[]).find(x=>String(x.id)===String(id))}
