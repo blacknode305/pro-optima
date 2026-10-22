@@ -37,6 +37,10 @@
 .card[class*="order-status-"]{border-left:4px solid var(--tone);padding-left:9px}
 .card .status{background:var(--tone-bg,#edf1f3);color:var(--tone,#4c5b63);border:1px solid var(--tone-line,#d0d9de);font-size:11px;font-weight:850;padding:5px 8px;border-radius:9px;text-align:center;white-space:normal;max-width:47%;line-height:1.3}
 @media(max-width:520px){.status-group summary{padding:10px 11px}.status-group-content{padding:7px}.status-group-title{font-size:13px}.status-group-hint{font-size:10px}}
+
+/* Always-visible status navigation for the selected production date. */
+.status-info-banner{margin-bottom:10px;padding:10px 12px;font-size:12px;line-height:1.5;color:#526879;border:1px solid #d7e4eb;border-radius:10px;background:#f0f7fb}
+.status-readonly-hint{margin-top:8px;padding:7px 9px;border-radius:8px;font-size:11px;line-height:1.5;color:#6b7680;background:#f3f6f8}
 </style></head><body>
 <div id="login" class="login"><div class="loginbox"><div class="brand">PRO OPTIMA · Производство</div><p class="muted">Сегодняшний список заявок и приёмка поставок по настройкам администратора.</p><label>Производство</label><select id="lb"><option>Лободы</option><option>Нуркена</option><option>Горняк</option><option>Пришахтинск</option><option>Сарань</option><option>Ермекова</option><option>Анжерская</option></select><label>PIN производства</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"><button class="primary full" style="margin-top:11px" onclick="login()">Войти</button><div id="lm"></div></div></div>
 <div id="app" class="app" style="display:none"><header><div class="head"><div><div class="brand">PRO OPTIMA · <span id="bn"></span></div><div id="tl" class="muted"></div></div><div><span id="on" class="online">...</span><button style="border:0;background:transparent;padding:4px" onclick="logout()">Сменить</button></div></div><div class="tabs"><button id="to" class="active" onclick="show('o')">Заявки сегодня</button><button id="tr" onclick="show('r')">Поставки сегодня</button></div></header><main><section id="vo" class="view active"><div id="so" class="summary"></div><div id="lo"></div></section><section id="vr" class="view"><div id="sr" class="summary"></div><div id="lr"></div></section></main></div>
@@ -64,25 +68,44 @@ function formStatusText(st){
  return {new:"Не заполнена",sent:"Заявка подана",confirmed:"Ожидается",expected:"Ожидается",done:"Принято",received:"Получена",cancelled:"Отменена"}[st]||String(st||"Не заполнена");
 }
 function render(){
- const rows=S.plan||[],groups={new:[],sent:[],waiting:[],done:[],other:[]};
- rows.forEach(r=>{const o=of(r),st=o?.stage||"new";groups[formGroupKey(st)].push({r,o,st})});
- const sent=groups.sent.length,closed=groups.waiting.length+groups.done.length;
- $("so").innerHTML=`<span class="chip">Сегодня: ${rows.length}</span><span class="chip">Не поданы: ${groups.new.length}</span><span class="chip">Поданы: ${sent}</span><span class="chip">Ожидаются / приняты: ${closed}</span>`;
- if(!rows.length){
-   $("lo").innerHTML='<div class="empty">На выбранную дату заявок по графику нет.</div>';
- }else{
-   $("lo").innerHTML=FORM_STATUS_GROUPS.filter(g=>groups[g.key].length||g.key==="new").map(g=>{
-     const cards=groups[g.key].map(({r,o,st})=>{
-       const k=formGroupKey(st),lock=o&&["confirmed","expected","done"].includes(st);
-       return `<div class="card order-status-${k}"><div class="top"><div><div class="title">${esc(r.supplier)}</div><div class="meta">Поставка: <b>${fd(r.deliveryDate)}</b> · товаров: ${r.items.length}</div></div><span class="status status-${k}">${esc(formStatusText(st))}</span></div><div class="actions"><button class="primary" ${lock?"disabled":""} onclick="openOrder('${esc(r.supplierId)}')">${o?.stage==="sent"?"Исправить заявку":"Заполнить заявку"}</button></div></div>`;
-     }).join("");
-     return `<details class="status-group group-${g.key}" data-status-group="${g.key}" ${FORM_GROUP_OPEN[g.key]?"open":""}><summary><span class="status-group-title">${g.label}</span><span class="status-group-count">${groups[g.key].length}</span><span class="status-group-hint">${g.hint}</span></summary><div class="status-group-content">${cards||'<div class="status-group-empty">Все заявки этой группы обработаны.</div>'}</div></details>`;
-   }).join("");
-   $("lo").querySelectorAll(".status-group").forEach(el=>el.addEventListener("toggle",()=>{FORM_GROUP_OPEN[el.dataset.statusGroup]=el.open}));
- }
- const rec=(S.orders||[]).filter(o=>["confirmed","expected"].includes(o.stage)&&o.deliveryDate===S.today);
- $("sr").innerHTML=`<span class="chip">Поставки сегодня: ${rec.length}</span>`;
- $("lr").innerHTML=rec.length?rec.map(o=>`<div class="card order-status-waiting"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status status-waiting">Ожидается</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>';
+  const rows=Array.isArray(S?.plan)?S.plan:[];
+  const grouped={new:[],sent:[],waiting:[],done:[],other:[]};
+  const shownOrderIds=new Set();
+  rows.forEach(r=>{
+    const o=of(r),st=o?.stage||"new";
+    if(o?.id)shownOrderIds.add(String(o.id));
+    grouped[formGroupKey(st)].push({r,o,st,archived:false});
+  });
+  // Keep statuses visible for orders created on this selected date even if the
+  // current supplier schedule no longer includes them. These cards are read-only.
+  const selectedDate=String(S?.today||"");
+  (S?.orders||[]).forEach(o=>{
+    if(!o||!selectedDate||String(o.requestDate||"")!==selectedDate)return;
+    if(o.id&&shownOrderIds.has(String(o.id)))return;
+    const matched=rows.some(r=>r.requestDate===o.requestDate&&
+      ((o.supplierId&&String(o.supplierId)===String(r.supplierId))||norm(o.supplier)===norm(r.supplier)));
+    if(matched)return;
+    const st=o.stage||"new";
+    grouped[formGroupKey(st)].push({r:null,o,st,archived:true});
+  });
+  const total=Object.values(grouped).reduce((s,a)=>s+a.length,0);
+  $("so").innerHTML=`<span class="chip">На дату: ${total}</span><span class="chip">Не поданы: ${grouped.new.length}</span><span class="chip">Поданы: ${grouped.sent.length}</span><span class="chip">Ожидаются: ${grouped.waiting.length}</span><span class="chip">Приняты: ${grouped.done.length}</span>`;
+  $("lo").innerHTML=`<div class="status-info-banner">Заявки по выбранной дате сгруппированы по статусам. Нажми на заголовок группы, чтобы раскрыть или скрыть её.</div>`+
+    FORM_STATUS_GROUPS.map(g=>{
+      const cards=grouped[g.key].map(({r,o,st,archived})=>{
+        const k=formGroupKey(st);
+        if(archived){
+          return `<div class="card order-status-${k}"><div class="top"><div><div class="title">${esc(o.supplier||"Поставщик")}</div><div class="meta">Поставка: <b>${fd(o.deliveryDate)}</b> · товаров: ${(o.items||[]).length}</div></div><span class="status status-${k}">${esc(formStatusText(st))}</span></div><div class="status-readonly-hint">Заявка сохранена в истории за выбранную дату. В текущем графике этого поставщика нет.</div></div>`;
+        }
+        const locked=o&&["confirmed","expected","done"].includes(st);
+        return `<div class="card order-status-${k}"><div class="top"><div><div class="title">${esc(r.supplier)}</div><div class="meta">Поставка: <b>${fd(r.deliveryDate)}</b> · товаров: ${r.items.length}</div></div><span class="status status-${k}">${esc(formStatusText(st))}</span></div><div class="actions"><button class="primary" ${locked?"disabled":""} onclick="openOrder('${esc(r.supplierId)}')">${o?.stage==="sent"?"Исправить заявку":"Заполнить заявку"}</button></div></div>`;
+      }).join("");
+      return `<details class="status-group group-${g.key}" data-status-group="${g.key}" ${FORM_GROUP_OPEN[g.key]?"open":""}><summary><span class="status-group-title">${g.label}</span><span class="status-group-count">${grouped[g.key].length}</span><span class="status-group-hint">${g.hint}</span></summary><div class="status-group-content">${cards||'<div class="status-group-empty">Заявок с этим статусом нет.</div>'}</div></details>`;
+    }).join("");
+  $("lo").querySelectorAll(".status-group").forEach(el=>el.addEventListener("toggle",()=>{FORM_GROUP_OPEN[el.dataset.statusGroup]=el.open}));
+  const rec=(S.orders||[]).filter(o=>["confirmed","expected"].includes(o.stage)&&o.deliveryDate===S.today);
+  $("sr").innerHTML=`<span class="chip">Поставки сегодня: ${rec.length}</span>`;
+  $("lr").innerHTML=rec.length?rec.map(o=>`<div class="card order-status-waiting"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status status-waiting">Ожидается</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>';
 }
 function plan(id){return(S.plan||[]).find(x=>String(x.supplierId)===String(id))}function ord(id){return(S.orders||[]).find(x=>String(x.id)===String(id))}function om(t,b,f=""){$("mt").textContent=t;$("mb").innerHTML=b;$("mf").innerHTML=f;$("ov").classList.add("open")}function cm(){$("ov").classList.remove("open")}
 function itemRow(p,x,i){return`<div class="item" data-i="${i}"><div class="p"><b>${esc(p.name)}</b><div class="muted">база: ${esc(p.unit||"—")}</div></div><input class="sq" inputmode="decimal" value="${esc(x.stock??"")}" placeholder="0"><select class="su">${unitOptions(x.stockUnit||p.unit||"")}</select><input class="oq" inputmode="decimal" value="${esc(x.expected??"")}" placeholder="0"><select class="ou">${unitOptions(x.unit||p.unit||"")}</select></div>`}
