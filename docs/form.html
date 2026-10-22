@@ -13,6 +13,30 @@
   .app .brand{font-size:16px}
   .modal .item input,.modal .item select,.modal .recv input,.modal .recv select{font-size:12px}
 }
+
+
+/* Status colors and collapsible order groups. */
+.status-group{border:1px solid #d9e2e7;border-radius:12px;margin:0 0 10px;background:#fff;overflow:hidden}
+.status-group summary{display:flex;align-items:center;gap:9px;flex-wrap:wrap;cursor:pointer;list-style:none;padding:13px 12px;min-height:48px;user-select:none;background:var(--tone-bg,#f7f9fa);color:var(--tone,#46545b)}
+.status-group summary::-webkit-details-marker{display:none}
+.status-group summary::after{content:"⌄";font-size:20px;font-weight:750;line-height:1;margin-left:auto;transform:rotate(0deg);transition:transform .16s ease}
+.status-group[open] summary::after{transform:rotate(180deg)}
+.status-group summary:focus-visible{outline:3px solid #719abe;outline-offset:-3px}
+.status-group-title{font-size:14px;font-weight:850}
+.status-group-count{font-size:12px;font-weight:850;border-radius:50px;padding:3px 9px;background:#fff;border:1px solid var(--tone-line,#d9e2e7);color:var(--tone,#46545b)}
+.status-group-hint{font-size:11px;flex:1 1 100%;color:#667781;line-height:1.3;order:3}
+.status-group-content{padding:9px;background:#fbfcfd;border-top:1px solid var(--tone-line,#e3eaee)}
+.status-group-content .card{margin:0 0 8px}
+.status-group-content .card:last-child{margin-bottom:0}
+.status-group-empty{padding:13px 8px;text-align:center;color:#75848d;font-size:12px}
+.group-new,.group-received,.order-status-new,.status-new,.card.received{--tone:#9c541e;--tone-bg:#fff2e6;--tone-line:#eed0ad}
+.group-sent,.order-status-sent,.status-sent,.card.sent{--tone:#285d9b;--tone-bg:#e9f3ff;--tone-line:#bfd8f3}
+.group-waiting,.order-status-waiting,.status-waiting,.card.confirmed,.card.expected{--tone:#6552a2;--tone-bg:#f1eeff;--tone-line:#d6cef7}
+.group-done,.order-status-done,.status-done,.card.done{--tone:#247248;--tone-bg:#e8f6ec;--tone-line:#b9dec6}
+.group-other,.order-status-other,.status-other,.card.cancelled{--tone:#626d75;--tone-bg:#edf1f3;--tone-line:#d0d9de}
+.card[class*="order-status-"]{border-left:4px solid var(--tone);padding-left:9px}
+.card .status{background:var(--tone-bg,#edf1f3);color:var(--tone,#4c5b63);border:1px solid var(--tone-line,#d0d9de);font-size:11px;font-weight:850;padding:5px 8px;border-radius:9px;text-align:center;white-space:normal;max-width:47%;line-height:1.3}
+@media(max-width:520px){.status-group summary{padding:10px 11px}.status-group-content{padding:7px}.status-group-title{font-size:13px}.status-group-hint{font-size:10px}}
 </style></head><body>
 <div id="login" class="login"><div class="loginbox"><div class="brand">PRO OPTIMA · Производство</div><p class="muted">Сегодняшний список заявок и приёмка поставок по настройкам администратора.</p><label>Производство</label><select id="lb"><option>Лободы</option><option>Нуркена</option><option>Горняк</option><option>Пришахтинск</option><option>Сарань</option><option>Ермекова</option><option>Анжерская</option></select><label>PIN производства</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"><button class="primary full" style="margin-top:11px" onclick="login()">Войти</button><div id="lm"></div></div></div>
 <div id="app" class="app" style="display:none"><header><div class="head"><div><div class="brand">PRO OPTIMA · <span id="bn"></span></div><div id="tl" class="muted"></div></div><div><span id="on" class="online">...</span><button style="border:0;background:transparent;padding:4px" onclick="logout()">Сменить</button></div></div><div class="tabs"><button id="to" class="active" onclick="show('o')">Заявки сегодня</button><button id="tr" onclick="show('r')">Поставки сегодня</button></div></header><main><section id="vo" class="view active"><div id="so" class="summary"></div><div id="lo"></div></section><section id="vr" class="view"><div id="sr" class="summary"></div><div id="lr"></div></section></main></div>
@@ -27,7 +51,39 @@ async function start(){$("login").style.display="none";$("app").style.display="b
 async function load(){S=await api("/api/operator/bootstrap");branch=S.branch;localStorage.setItem(BK,branch);$("bn").textContent=branch;$("tl").textContent=`${S.dayName}, ${fd(S.today)}`;$("on").textContent=`rev ${S.revision}`;render()}
 function show(x){$("vo").classList.toggle("active",x==="o");$("vr").classList.toggle("active",x==="r");$("to").classList.toggle("active",x==="o");$("tr").classList.toggle("active",x==="r")}
 function of(r){return(S.orders||[]).find(o=>o.requestDate===r.requestDate&&((o.supplierId&&String(o.supplierId)===String(r.supplierId))||norm(o.supplier)===norm(r.supplier)))}
-function render(){const rows=S.plan||[],sent=rows.filter(r=>of(r)?.stage==="sent").length,closed=rows.filter(r=>["confirmed","expected","done"].includes(of(r)?.stage)).length;$("so").innerHTML=`<span class="chip">Сегодня: ${rows.length}</span><span class="chip">Подано: ${sent}</span><span class="chip">Ожидается/закрыто: ${closed}</span>`;$("lo").innerHTML=rows.length?rows.map(r=>{const o=of(r),st=o?.stage||"new",txt={new:"Не заполнено",sent:"Заявка подана",confirmed:"Ожидается",expected:"Ожидается",done:"Принято"}[st]||st,lock=o&&["confirmed","expected","done"].includes(st);return`<div class="card"><div class="top"><div><div class="title">${esc(r.supplier)}</div><div class="meta">Поставка: <b>${fd(r.deliveryDate)}</b> · товаров: ${r.items.length}</div></div><span class="status">${txt}</span></div><div class="actions"><button class="primary" ${lock?"disabled":""} onclick="openOrder('${esc(r.supplierId)}')">${o?.stage==="sent"?"Исправить заявку":"Заполнить заявку"}</button></div></div>`}).join(""):'<div class="empty">На сегодня заявок по графику нет.</div>';const rec=(S.orders||[]).filter(o=>["confirmed","expected"].includes(o.stage)&&o.deliveryDate===S.today);$("sr").innerHTML=`<span class="chip">Поставки сегодня: ${rec.length}</span>`;$("lr").innerHTML=rec.length?rec.map(o=>`<div class="card"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status">Ожидается</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>'}
+const FORM_STATUS_GROUPS=[{"key":"new","label":"Не поданы","hint":"Нужно заполнить и отправить"},{"key":"sent","label":"Поданы","hint":"Уже отправлены"},{"key":"waiting","label":"Ожидаются","hint":"Подтверждены и ожидают поставки"},{"key":"done","label":"Приняты","hint":"Поставка завершена"},{"key":"other","label":"Другие статусы","hint":"Требуют проверки"}];
+const FORM_GROUP_OPEN={new:true,sent:false,waiting:true,done:false,other:false};
+function formGroupKey(st){
+ if(!st||st==="new")return "new";
+ if(st==="sent")return "sent";
+ if(st==="confirmed"||st==="expected")return "waiting";
+ if(st==="done")return "done";
+ return "other";
+}
+function formStatusText(st){
+ return {new:"Не заполнена",sent:"Заявка подана",confirmed:"Ожидается",expected:"Ожидается",done:"Принято",received:"Получена",cancelled:"Отменена"}[st]||String(st||"Не заполнена");
+}
+function render(){
+ const rows=S.plan||[],groups={new:[],sent:[],waiting:[],done:[],other:[]};
+ rows.forEach(r=>{const o=of(r),st=o?.stage||"new";groups[formGroupKey(st)].push({r,o,st})});
+ const sent=groups.sent.length,closed=groups.waiting.length+groups.done.length;
+ $("so").innerHTML=`<span class="chip">Сегодня: ${rows.length}</span><span class="chip">Не поданы: ${groups.new.length}</span><span class="chip">Поданы: ${sent}</span><span class="chip">Ожидаются / приняты: ${closed}</span>`;
+ if(!rows.length){
+   $("lo").innerHTML='<div class="empty">На выбранную дату заявок по графику нет.</div>';
+ }else{
+   $("lo").innerHTML=FORM_STATUS_GROUPS.filter(g=>groups[g.key].length||g.key==="new").map(g=>{
+     const cards=groups[g.key].map(({r,o,st})=>{
+       const k=formGroupKey(st),lock=o&&["confirmed","expected","done"].includes(st);
+       return `<div class="card order-status-${k}"><div class="top"><div><div class="title">${esc(r.supplier)}</div><div class="meta">Поставка: <b>${fd(r.deliveryDate)}</b> · товаров: ${r.items.length}</div></div><span class="status status-${k}">${esc(formStatusText(st))}</span></div><div class="actions"><button class="primary" ${lock?"disabled":""} onclick="openOrder('${esc(r.supplierId)}')">${o?.stage==="sent"?"Исправить заявку":"Заполнить заявку"}</button></div></div>`;
+     }).join("");
+     return `<details class="status-group group-${g.key}" data-status-group="${g.key}" ${FORM_GROUP_OPEN[g.key]?"open":""}><summary><span class="status-group-title">${g.label}</span><span class="status-group-count">${groups[g.key].length}</span><span class="status-group-hint">${g.hint}</span></summary><div class="status-group-content">${cards||'<div class="status-group-empty">Все заявки этой группы обработаны.</div>'}</div></details>`;
+   }).join("");
+   $("lo").querySelectorAll(".status-group").forEach(el=>el.addEventListener("toggle",()=>{FORM_GROUP_OPEN[el.dataset.statusGroup]=el.open}));
+ }
+ const rec=(S.orders||[]).filter(o=>["confirmed","expected"].includes(o.stage)&&o.deliveryDate===S.today);
+ $("sr").innerHTML=`<span class="chip">Поставки сегодня: ${rec.length}</span>`;
+ $("lr").innerHTML=rec.length?rec.map(o=>`<div class="card order-status-waiting"><div class="top"><div><div class="title">${esc(o.supplier)}</div><div class="meta">Подано ${fd(o.requestDate)} · позиций ${(o.items||[]).filter(x=>x.used!==false).length}</div></div><span class="status status-waiting">Ожидается</span></div><div class="actions"><button class="primary" onclick="openReceive('${esc(o.id)}')">Заполнить приёмку</button></div></div>`).join(""):'<div class="empty">На сегодня подтверждённых поставок нет.</div>';
+}
 function plan(id){return(S.plan||[]).find(x=>String(x.supplierId)===String(id))}function ord(id){return(S.orders||[]).find(x=>String(x.id)===String(id))}function om(t,b,f=""){$("mt").textContent=t;$("mb").innerHTML=b;$("mf").innerHTML=f;$("ov").classList.add("open")}function cm(){$("ov").classList.remove("open")}
 function itemRow(p,x,i){return`<div class="item" data-i="${i}"><div class="p"><b>${esc(p.name)}</b><div class="muted">база: ${esc(p.unit||"—")}</div></div><input class="sq" inputmode="decimal" value="${esc(x.stock??"")}" placeholder="0"><select class="su">${unitOptions(x.stockUnit||p.unit||"")}</select><input class="oq" inputmode="decimal" value="${esc(x.expected??"")}" placeholder="0"><select class="ou">${unitOptions(x.unit||p.unit||"")}</select></div>`}
 function openOrder(id){const r=plan(id);if(!r)return;const o=of(r),old=new Map((o?.items||[]).map(x=>[String(x.productId||x.product),x])),rows=r.items.map((p,i)=>itemRow(p,old.get(String(p.productId))||old.get(p.name)||{},i)).join("");om(r.supplier,`<div class="notice">Остаток и заказ имеют отдельные единицы измерения. «-» в остатке = товар не используется.</div><div class="item-head"><div>Товар</div><div>Ост.</div><div>Ед.</div><div>Заказ</div><div>Ед.</div></div>${rows}<div id="em"></div>`,`<button onclick="cm()">Отмена</button><button class="primary" onclick="saveOrder('${esc(id)}')">${o?.stage==="sent"?"Отправить исправление":"Подать заявку"}</button>`);$("mb").addEventListener("input",e=>{if(e.target.matches(".sq")){const row=e.target.closest(".item"),off=e.target.value.trim()==="-";row.querySelector(".oq").disabled=off;row.querySelector(".ou").disabled=off;if(off)row.querySelector(".oq").value="0"}})}
