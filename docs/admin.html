@@ -565,6 +565,17 @@ html[data-theme="dark"] .catalog-row.unlinked{background:#302b20}html[data-theme
 @media(max-width:900px){.catalog-toolbar{grid-template-columns:1fr 1fr}.catalog-row{grid-template-columns:1fr 180px 90px}.catalog-link{grid-column:1/3}.catalog-actions{grid-column:3}.admin-panels{grid-template-columns:1fr}}
 @media(max-width:620px){.remote-tools{gap:3px}.remote-tools button{padding:4px 6px;font-size:9px}.catalog-toolbar{grid-template-columns:1fr}.catalog-row{grid-template-columns:1fr}.catalog-price{text-align:left}.catalog-link,.catalog-actions{grid-column:auto}.catalog-actions{justify-content:flex-start}.access-row{grid-template-columns:1fr 95px auto}}
 
+
+/* Compact fullscreen toggle alongside Access and Database controls. */
+.remote-tools #adminFullscreenToggle{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;flex:0 0 36px;width:36px;min-width:36px;height:32px;min-height:32px;padding:5px!important;line-height:1;border-radius:8px;transition:background-color .14s ease,border-color .14s ease,color .14s ease}
+.remote-tools #adminFullscreenToggle svg{display:block;width:18px;height:18px;flex:none}
+.remote-tools #adminFullscreenToggle .po-fs-collapse{display:none}
+.remote-tools #adminFullscreenToggle[aria-pressed="true"] .po-fs-expand{display:none}
+.remote-tools #adminFullscreenToggle[aria-pressed="true"] .po-fs-collapse{display:block}
+.remote-tools #adminFullscreenToggle:not(:disabled):hover{background:#dbeaf3;border-color:#90adbf;color:#214d68}
+.remote-tools #adminFullscreenToggle:focus-visible{outline:2px solid #4d88ac;outline-offset:2px}
+.remote-tools #adminFullscreenToggle:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:620px){.remote-tools #adminFullscreenToggle{width:32px;min-width:32px;height:30px;min-height:30px;flex-basis:32px}}
 </style>
 </head>
 <body>
@@ -579,6 +590,10 @@ html[data-theme="dark"] .catalog-row.unlinked{background:#302b20}html[data-theme
       <span id="remoteState" class="remote-state">подключение...</span>
       <button class="secondary" onclick="setAdminTokenPrompt()">🔑 Доступ</button>
       <button class="secondary" onclick="reloadRemote()">↻ База</button>
+      <button class="secondary po-fullscreen-toggle" id="adminFullscreenToggle" type="button" onclick="toggleAdminFullscreen()" aria-label="Включить полноэкранный режим" aria-pressed="false" title="На весь экран">
+        <svg class="po-fs-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>
+        <svg class="po-fs-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9h6V3M21 9h-6V3M15 21v-6h6M3 15h6v6"/></svg>
+      </button>
     </div>
   </div>
   <nav class="nav">
@@ -3506,6 +3521,37 @@ const _goOriginal=go;
 go=function(view){_goOriginal(view);if(view==="settings")loadAdminPanels()};
 
 /* START */
+
+/* Browser fullscreen is reversible via the button or Escape. */
+function syncAdminFullscreen(){
+  const button=document.getElementById("adminFullscreenToggle");
+  if(!button)return;
+  const active=!!(document.fullscreenElement||document.webkitFullscreenElement);
+  const supported=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen);
+  button.disabled=!supported&&!active;
+  button.setAttribute("aria-pressed",String(active));
+  button.setAttribute("aria-label",active?"Выйти из полноэкранного режима":"Включить полноэкранный режим");
+  button.title=active?"Выйти из полного экрана (Esc)":"На весь экран";
+  if(!supported&&!active)button.title="Полноэкранный режим не поддерживается браузером";
+}
+async function toggleAdminFullscreen(){
+  try{
+    if(document.fullscreenElement||document.webkitFullscreenElement){
+      if(document.exitFullscreen)await document.exitFullscreen();
+      else if(document.webkitExitFullscreen)await document.webkitExitFullscreen();
+    }else{
+      const root=document.documentElement;
+      if(root.requestFullscreen)await root.requestFullscreen();
+      else if(root.webkitRequestFullscreen)await root.webkitRequestFullscreen();
+      else throw new Error("Полноэкранный режим не поддерживается браузером.");
+    }
+  }catch(error){
+    console.warn("[PRO OPTIMA] Fullscreen toggle:",error);
+  }finally{syncAdminFullscreen()}
+}
+document.addEventListener("fullscreenchange",syncAdminFullscreen);
+document.addEventListener("webkitfullscreenchange",syncAdminFullscreen);
+syncAdminFullscreen();
 startRemoteApp();
 </script>
 <script src="admin-order-manual.js?v=20261024-1"></script>
