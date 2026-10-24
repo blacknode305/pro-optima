@@ -19,29 +19,26 @@
     #modalBackdrop.po-manual-open #modalTitle{overflow-wrap:anywhere}
     .po-manual-details{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 12px}
     .po-manual-details span{font-size:11px;color:var(--po-text,#344b58);border-radius:7px;padding:6px 8px;border:1px solid var(--po-line,#d8e3e9);background:var(--po-surface-soft,#f4f8fa)}
-    .po-manual-layout{display:grid;grid-template-columns:minmax(240px,.85fr) minmax(0,1.8fr);gap:12px;align-items:start}
     .po-manual-panel{border:1px solid var(--po-line,#dae3e8);background:var(--po-surface,#fff);border-radius:11px;overflow:hidden;min-width:0}
     .po-manual-panel-title{font-size:14px;font-weight:750;padding:12px;background:var(--po-surface-soft,#f6f9fa);border-bottom:1px solid var(--po-line,#dae3e8)}
-    .po-manual-catalog{max-height:55vh;overflow:auto;padding:4px 10px}
-    .po-manual-catalog-item{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:10px 3px;border-bottom:1px solid var(--po-line,#e5eaed);font-size:12px;line-height:1.45}
-    .po-manual-catalog-name{font-weight:650;overflow-wrap:anywhere}
     .po-manual-muted{font-size:11px;color:var(--po-muted,#6b7c85)}
-    .po-manual-catalog-num{color:#79909a}
     .po-manual-form{padding:10px}
     .po-manual-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}
     .po-manual-dates label{display:block;margin:0 0 5px}
     .po-manual-dates input{width:100%;min-width:0}
-    .po-manual-header,.po-manual-row{display:grid;grid-template-columns:minmax(135px,1.45fr) minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
+    .po-manual-header,.po-manual-row{display:grid;grid-template-columns:minmax(190px,1.75fr) minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:center}
     .po-manual-header{font-size:11px;font-weight:750;color:var(--po-muted,#6e7f88);padding:8px 3px}
-    .po-manual-row{border-top:1px solid var(--po-line,#e5eaed);padding:9px 3px}
-    .po-manual-name{font-size:12px;font-weight:650;overflow-wrap:anywhere;line-height:1.4}
+    .po-manual-row{border-top:1px solid var(--po-line,#e5eaed);padding:10px 3px}
+    .po-manual-name{font-size:13px;font-weight:650;overflow-wrap:anywhere;line-height:1.4;min-width:0}
+    .po-manual-price{display:block;font-size:11px;font-weight:600;line-height:1.45;color:var(--po-muted,#627e8d);margin-top:4px;white-space:normal}
+    .po-manual-index{display:inline-block;margin-right:7px;color:var(--po-muted,#7a8a93);font-weight:500;font-size:11px}
     .po-manual-qty{display:grid;grid-template-columns:minmax(0,1fr) 68px;gap:4px;min-width:0}
     .po-manual-qty input,.po-manual-qty select{width:100%;min-width:0;height:36px;padding:5px;text-align:center;font-size:12px}
     .po-manual-row.unused{opacity:.58;background:var(--po-surface-soft,#f6f8fa)}
     .po-manual-msg{font-size:12px;line-height:1.45;margin-top:10px;padding:10px;border-radius:8px;background:#edf3f6;color:#35536a}
     .po-manual-msg.bad{background:#fee8e8;color:#8f3535}.po-manual-msg.ok{background:#eaf6ed;color:#297043}
     html[data-theme="dark"] .po-manual-msg{background:#293a44;color:#d9e8f0}
-    @media(max-width:780px){.po-manual-layout{grid-template-columns:1fr}.po-manual-catalog{max-height:200px}.po-manual-qty{grid-template-columns:minmax(0,1fr)}.po-manual-qty input,.po-manual-qty select{height:33px}.po-manual-header,.po-manual-row{grid-template-columns:minmax(92px,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:5px}.po-manual-name{font-size:11px}}
+    @media(max-width:780px){.po-manual-qty{grid-template-columns:minmax(0,1fr)}.po-manual-qty input,.po-manual-qty select{height:33px}.po-manual-header,.po-manual-row{grid-template-columns:minmax(110px,1.45fr) minmax(0,1fr) minmax(0,1fr);gap:6px}.po-manual-name{font-size:12px}}
   `;document.head.appendChild(style);
   const options=u=>[...new Set([u,...(typeof window.PRO_OPTIMA_GET_UNIT_PRESETS==="function"?window.PRO_OPTIMA_GET_UNIT_PRESETS():UNITS)].filter(Boolean))]
     .map(v=>`<option value="${escH(v)}" ${v===u?"selected":""}>${escH(v)}</option>`).join("");
@@ -49,7 +46,7 @@
     .filter(o=>same(o.branch,branch)&&o.requestDate===date&&(String(o.supplierId||"")===String(supplier.id)||same(o.supplier,supplier.name)))
     .sort((a,b)=>String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||"")))[0]||null;
   function itemsFor(planItems,old){
-    const list=planItems.map(x=>({id:x.p.id,name:x.p.name,unit:x.orderUnit||x.p.unit||"шт",product:x.p}));
+    const list=planItems.map(x=>({id:x.p.id,name:x.p.name,unit:x.orderUnit||x.p.unit||"шт",product:x.p,offer:x.o||null}));
     for(const x of old?.items||[]){
       if(list.some(e=>(e.id!=null&&String(e.id)===String(x.productId))||same(e.name,x.product)))continue;
       list.push({id:x.productId||null,name:x.product||"Товар",unit:x.unit||"шт",product:null,legacy:true});
@@ -72,7 +69,7 @@
     const excluded=p.used===false||String(p.stock??"").trim()==="-";
     const stock=excluded?"-":p.stock??"",ordered=excluded?"0":p.expected??"";
     return `<div class="po-manual-row ${excluded?"unused":""}" data-index="${index}">
-      <div class="po-manual-name">${escH(x.name)}${x.legacy?'<div class="po-manual-muted">Ранее сохранённый товар</div>':""}</div>
+      <div class="po-manual-name"><span class="po-manual-index">${index+1}.</span>${escH(x.name)}${x.offer&&hasPrice(x.offer)?`<span class="po-manual-price">Цена: ${escH(money(x.offer.price))}${typeof offerUnit==="function"&&offerUnit(x.offer)?` / ${escH(offerUnit(x.offer))}`:""}</span>`:""}${x.legacy?'<div class="po-manual-muted">Ранее сохранённый товар</div>':""}</div>
       <div class="po-manual-qty"><input class="po-manual-stock" aria-label="Остаток ${escH(x.name)}" inputmode="decimal" value="${escH(stock)}" placeholder="0 / -"><select class="po-manual-stock-unit" aria-label="Единица остатка">${options(stockUnit)}</select></div>
       <div class="po-manual-qty"><input class="po-manual-order" aria-label="Заказ ${escH(x.name)}" inputmode="decimal" value="${escH(ordered)}" placeholder="0" ${excluded?"disabled":""}><select class="po-manual-order-unit" aria-label="Единица заказа" ${excluded?"disabled":""}>${options(unit)}</select></div>
     </div>`;
@@ -94,14 +91,12 @@
     if(!r||r.excluded)return;
     const date=nextDate(plan.dayIndex),old=currentFor(plan.branch,r.s,date,orderHistory);
     state={branch:plan.branch,dayIndex:plan.dayIndex,supplier:r.s,items:r.items,existing:old,entries:[]};
-    const catalog=r.items.map((x,i)=>`<div class="po-manual-catalog-item"><div class="po-manual-catalog-num">${i+1}</div><div><div class="po-manual-catalog-name">${escH(x.p.name)}</div><div class="po-manual-muted">${escH(x.orderUnit||x.p.unit||"шт")} · ${x.o&&hasPrice(x.o)?escH(money(x.o.price)):"без цены"}</div></div></div>`).join("");
     const body=`<div class="po-manual-details"><span>Производство: <b>${escH(plan.branch)}</b></span><span>Поставщик: <b>${escH(r.s.name)}</b></span><span>Позиций: <b>${r.items.length}</b></span><span id="poManualStatus">${escH(status(old?.stage))}</span></div>
-      <div class="po-manual-layout"><section class="po-manual-panel"><div class="po-manual-panel-title">Список товаров</div><div class="po-manual-catalog">${catalog}</div></section>
-      <section class="po-manual-panel"><div class="po-manual-panel-title">Заявка — заполнение вручную</div><div class="po-manual-form">
+      <section class="po-manual-panel"><div class="po-manual-panel-title">Товары и заявка</div><div class="po-manual-form">
         <div class="po-manual-dates"><div><label for="poManualDate">Дата заявки</label><input id="poManualDate" type="date" value="${date}"></div>
         <div><label for="poManualDelivery">Дата поставки</label><input id="poManualDelivery" type="date"></div></div>
         <div class="po-manual-header"><div>Наименование</div><div>Остаток / ед.</div><div>Заказ / ед.</div></div><div id="poManualRows"></div><div id="poManualMsg" class="po-manual-msg"></div>
-      </div></section></div>`;
+      </div></section>`;
     openModal("Заявка · "+r.s.name,body,'<button class="secondary" type="button" onclick="closeModal()">Закрыть</button><button class="primary" id="poManualSave" type="button">Сохранить заявку</button>');
     document.getElementById("modalBackdrop").classList.add("po-manual-open");
     refill(old);
