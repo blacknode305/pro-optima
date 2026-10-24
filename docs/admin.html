@@ -2797,7 +2797,7 @@ function renderOrderPlan(){
     const no=String(i).padStart(2,"0");
     return `<div class="order-card ${r.excluded?"order-card-excluded":""}">
       <div class="order-card-main"><div class="order-no">${no}</div><div><b>${esc(r.s.name)}</b><div class="muted">${esc(r.generatedSchedule?.order||DAY_LONG[dayIndex])} → ${esc(r.generatedSchedule?.delivery||"—")} · ${r.excluded?esc(r.excludeReason):`товаров: ${r.items.length}`}</div></div></div>
-      <div class="order-card-actions">${r.excluded?'<span class="excluded-label">ИСКЛЮЧЁН</span>':`<button class="small secondary" onclick="previewOrderItems('${esc(r.s.id)}')">Товары + заявка</button><button class="small primary" onclick="downloadSingleOrder('${esc(r.s.id)}',${i})">⇩ index.html</button>`}</div>
+      <div class="order-card-actions">${r.excluded?'<span class="excluded-label">ИСКЛЮЧЁН</span>':`<button class="small primary" onclick="previewOrderItems('${esc(r.s.id)}')">Заказ</button>`}</div>
     </div>`;
   }).join("");
 }
