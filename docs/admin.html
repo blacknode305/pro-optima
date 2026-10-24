@@ -4,6 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" type="image/x-icon" href="./favicon.ico?v=20261024-1">
+<link rel="shortcut icon" href="./favicon.ico?v=20261024-1">
 <title>PRO OPTIMA · Admin</title>
 <style>
 *{box-sizing:border-box}
@@ -2795,7 +2797,7 @@ function renderOrderPlan(){
     const no=String(i).padStart(2,"0");
     return `<div class="order-card ${r.excluded?"order-card-excluded":""}">
       <div class="order-card-main"><div class="order-no">${no}</div><div><b>${esc(r.s.name)}</b><div class="muted">${esc(r.generatedSchedule?.order||DAY_LONG[dayIndex])} → ${esc(r.generatedSchedule?.delivery||"—")} · ${r.excluded?esc(r.excludeReason):`товаров: ${r.items.length}`}</div></div></div>
-      <div class="order-card-actions">${r.excluded?'<span class="excluded-label">ИСКЛЮЧЁН</span>':`<button class="small secondary" onclick="previewOrderItems('${esc(r.s.id)}')">Товары</button><button class="small primary" onclick="downloadSingleOrder('${esc(r.s.id)}',${i})">⇩ index.html</button>`}</div>
+      <div class="order-card-actions">${r.excluded?'<span class="excluded-label">ИСКЛЮЧЁН</span>':`<button class="small secondary" onclick="previewOrderItems('${esc(r.s.id)}')">Товары + заявка</button><button class="small primary" onclick="downloadSingleOrder('${esc(r.s.id)}',${i})">⇩ index.html</button>`}</div>
     </div>`;
   }).join("");
 }
@@ -3506,5 +3508,6 @@ go=function(view){_goOriginal(view);if(view==="settings")loadAdminPanels()};
 /* START */
 startRemoteApp();
 </script>
+<script src="admin-order-manual.js?v=20261024-1"></script>
 </body>
 </html>
