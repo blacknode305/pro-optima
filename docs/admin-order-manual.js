@@ -97,7 +97,7 @@
         <div><label for="poManualDelivery">Дата поставки</label><input id="poManualDelivery" type="date"></div></div>
         <div class="po-manual-header"><div>Наименование</div><div>Остаток / ед.</div><div>Заказ / ед.</div></div><div id="poManualRows"></div><div id="poManualMsg" class="po-manual-msg"></div>
       </div></section>`;
-    openModal("Заявка · "+r.s.name,body,'<button class="secondary" type="button" onclick="closeModal()">Закрыть</button><button class="primary" id="poManualSave" type="button">Сохранить заявку</button>');
+    openModal("Заявка",body,'<button class="secondary" type="button" onclick="closeModal()">Закрыть</button><button class="primary" id="poManualSave" type="button">Сохранить заявку</button>');
     document.getElementById("modalBackdrop").classList.add("po-manual-open");
     refill(old);
     document.getElementById("poManualSave").addEventListener("click",save);
