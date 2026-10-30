@@ -256,6 +256,18 @@ function scheduleHasDay(value,idx){
 function deliveryDateForSchedule(schedule,requestDate){
   const reqIdx=dayIndexFromIso(requestDate);
   const deliveryDays=parseDays(schedule?.delivery);
+  const dayName=DAYS[reqIdx];
+  const rule=schedule?.deliveryTimingByDay?.[dayName];
+  // Missing rules retain the legacy behavior for backwards compatibility.
+  if(rule==="same"||rule==="next"){
+    const minOffset=rule==="next"?1:0;
+    if(!deliveryDays.length)return addDaysIso(requestDate,minOffset);
+    for(let offset=minOffset;offset<minOffset+7;offset++){
+      if(deliveryDays.includes(dayIndexFromIso(addDaysIso(requestDate,offset)))){
+        return addDaysIso(requestDate,offset);
+      }
+    }
+  }
   if(!deliveryDays.length)return requestDate;
   let best=7;
   for(const d of deliveryDays){
