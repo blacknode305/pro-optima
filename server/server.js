@@ -192,14 +192,14 @@ function corsHeaders(req){
   if(!ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes("*")){
     return {
       "Access-Control-Allow-Origin":"*",
-      "Access-Control-Allow-Headers":"Content-Type, Authorization, X-Admin-Token",
+      "Access-Control-Allow-Headers":"Content-Type, Authorization, X-Admin-Token, X-Optima-Write-Password",
       "Access-Control-Allow-Methods":"GET,POST,PATCH,PUT,DELETE,OPTIONS"
     };
   }
   if(origin && ALLOWED_ORIGINS.includes(origin)){
     return {
       "Access-Control-Allow-Origin":origin,"Vary":"Origin",
-      "Access-Control-Allow-Headers":"Content-Type, Authorization, X-Admin-Token",
+      "Access-Control-Allow-Headers":"Content-Type, Authorization, X-Admin-Token, X-Optima-Write-Password",
       "Access-Control-Allow-Methods":"GET,POST,PATCH,PUT,DELETE,OPTIONS"
     };
   }
