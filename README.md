@@ -77,3 +77,23 @@ npm run check
 ## Исторические формы
 
 Старые статические формы `GOR`, `LOB`, `NUR`, `PRI`, `SAR`, `DELIVERY_3` удалены из актуального дерева проекта. Они остаются доступными в Git-истории и могут быть восстановлены по commit SHA при необходимости.
+
+
+## Separate full-management password (staged feature)
+
+The `security/separate-write-password` branch enforces `SOPTIMA_WRITE_PASSWORD`
+on every non-GET admin API request, in addition to `SOPTIMA_ADMIN_TOKEN`.
+Set this secret directly in Railway service Variables; it cannot be set or
+changed by knowing the read token or through the dashboard API.
+
+Deployment checklist:
+1. Set a strong unique `SOPTIMA_WRITE_PASSWORD` in Railway (not in GitHub).
+2. Deploy this branch after verifying all administrative client interfaces.
+3. Test admin GET using only the read token; test PATCH without the write password
+   (must be 403); test with an incorrect write password (403); test with the
+   correct password (succeeds on a safe non-destructive update).
+4. Confirm backup and rollback procedures before production promotion.
+5. Do not expose this password in localStorage, query parameters, or logs.
+
+Without the variable, admin writes fail closed. DashboardX and the PRO OPTIMA
+admin frontend ask for the password on each write and do not persist it.
