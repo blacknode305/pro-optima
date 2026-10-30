@@ -759,6 +759,16 @@ async function api(req,res,pathname){
   }
 
   if(!adminOk(req))return send(res,401,{error:"Неверный или отсутствующий Admin token."},cors);
+  // The read token does not grant write privileges. Write password is configured
+  // solely through Railway environment variables, never through an API endpoint.
+  if(!["GET","HEAD","OPTIONS"].includes(req.method)){
+    const expected=String(process.env.SOPTIMA_WRITE_PASSWORD||"");
+    const submitted=String(req.headers["x-optima-write-password"]||"");
+    if(!expected || !submitted || !timingSafeEqualText(submitted,expected)){
+      return send(res,403,{error:expected?"Требуется отдельный пароль изменения данных.":"Запись заблокирована: SOPTIMA_WRITE_PASSWORD не настроен."},cors);
+    }
+  }
+
 
   if(pathname==="/api/admin/db"&&req.method==="GET"){
     const {db,meta}=loadState();return send(res,200,{ok:true,revision:meta.revision,updatedAt:meta.updatedAt,data:db},cors);
