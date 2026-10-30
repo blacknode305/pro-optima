@@ -3244,6 +3244,11 @@ function setAdminTokenPrompt(){
 async function remoteFetch(path,opts={}){
   const headers={"Content-Type":"application/json",...(opts.headers||{})};
   if(opts.admin!==false&&adminToken())headers.Authorization="Bearer "+adminToken();
+  if(path.startsWith("/api/admin/")&&!["GET","HEAD","OPTIONS"].includes(String(opts.method||"GET").toUpperCase())){
+    const writePassword=window.prompt("Пароль полного управления PRO OPTIMA:");
+    if(!writePassword)throw new Error("Изменение отменено: пароль не введён");
+    headers["X-Optima-Write-Password"]=writePassword;
+  }
   const r=await fetch(API_BASE+path,{...opts,headers});
   let data={};try{data=await r.json()}catch{}
   if(!r.ok)throw Object.assign(new Error(data.error||`HTTP ${r.status}`),{status:r.status,data});
