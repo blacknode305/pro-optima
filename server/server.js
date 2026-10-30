@@ -259,8 +259,8 @@ function deliveryDateForSchedule(schedule,requestDate){
   const dayName=DAYS[reqIdx];
   const rule=schedule?.deliveryTimingByDay?.[dayName];
   // Missing rules retain the legacy behavior for backwards compatibility.
-  if(rule==="same"||rule==="next"){
-    const minOffset=rule==="next"?1:0;
+  if(rule==="same"||rule==="next"||rule==="two"){
+    const minOffset=rule==="two"?2:rule==="next"?1:0;
     if(!deliveryDays.length)return addDaysIso(requestDate,minOffset);
     for(let offset=minOffset;offset<minOffset+7;offset++){
       if(deliveryDays.includes(dayIndexFromIso(addDaysIso(requestDate,offset)))){
