@@ -617,7 +617,7 @@ async function api(req,res,pathname){
 
 
   // DashboardX-owned namespace: can be migrated to an independent DashboardX database.
-  if(pathname==="/api/dashboardx/radio/stations" || /^\\/api\\/dashboardx\\/radio\\/stations\\/[^/]+$/.test(pathname)){
+  if(pathname==="/api/dashboardx/radio/stations" || /^\/api\/dashboardx\/radio\/stations\/[^/]+$/.test(pathname)){
     if(!adminOk(req))return send(res,401,{error:"Admin token required"},cors);
     if(req.method==="GET"&&pathname==="/api/dashboardx/radio/stations"){
       const {db}=loadState();
@@ -639,7 +639,7 @@ async function api(req,res,pathname){
         return send(res,201,{ok:true,station},cors);
       });
     }
-    const match=pathname.match(/^\\/api\\/dashboardx\\/radio\\/stations\\/([^/]+)$/);
+    const match=pathname.match(/^\/api\/dashboardx\/radio\/stations\/([^/]+)$/);
     if(match&&req.method==="DELETE")return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),db=state.db;
       const stations=db.dashboardx.media.radioStations;
