@@ -833,7 +833,7 @@ async function api(req,res,pathname){
     const body=await readBody(req),incoming=body.data||body;
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
-    try{validateDb(incoming)catch(e){return send(res,400,{error:e.message},cors)}
+    try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),meta=state.meta;
       const nextMeta=commitDb(incoming,current,meta);
