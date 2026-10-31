@@ -106,6 +106,10 @@ function validateDb(db){
   if(!Array.isArray(db.transfers)) db.transfers=[];
   if(!Array.isArray(db.dateRequests)) db.dateRequests=[];
   if(!db.settings || typeof db.settings!=="object") db.settings={};
+  if(db.dashboardx===undefined)db.dashboardx={schemaVersion:1,media:{radioStations:[]}};
+  if(!db.dashboardx||typeof db.dashboardx!=="object"||Array.isArray(db.dashboardx))throw new Error("dashboardx must be an object");
+  if(!db.dashboardx.media||typeof db.dashboardx.media!=="object"||Array.isArray(db.dashboardx.media))db.dashboardx.media={};
+  if(!Array.isArray(db.dashboardx.media.radioStations))db.dashboardx.media.radioStations=[];
   return db;
 }
 function loadState(){
@@ -604,12 +608,48 @@ function applySupplierUpdate(db,update){
 }
 
 const ALLOWED_TOP_LEVEL=new Set([
-  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","settings"
+  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","settings","dashboardx"
 ]);
 
 async function api(req,res,pathname){
   const cors=corsHeaders(req);
   if(req.method==="OPTIONS")return send(res,204,"",cors);
+
+
+  // DashboardX-owned namespace: can be migrated to an independent DashboardX database.
+  if(pathname==="/api/dashboardx/radio/stations" || /^\\/api\\/dashboardx\\/radio\\/stations\\/[^/]+$/.test(pathname)){
+    if(!adminOk(req))return send(res,401,{error:"Admin token required"},cors);
+    if(req.method==="GET"&&pathname==="/api/dashboardx/radio/stations"){
+      const {db}=loadState();
+      return send(res,200,{ok:true,stations:db.dashboardx.media.radioStations},cors);
+    }
+    if(req.method==="POST"&&pathname==="/api/dashboardx/radio/stations"){
+      const body=await readBody(req);
+      const name=String(body.name||"").trim(),raw=String(body.url||"").trim();
+      let stream;try{stream=new URL(raw)}catch{return send(res,400,{error:"Invalid stream URL"},cors)}
+      if(!name||name.length>120||raw.length>2048||!["https:","http:"].includes(stream.protocol)||stream.username||stream.password)
+        return send(res,400,{error:"Invalid station"},cors);
+      return enqueueWrite(async()=>{
+        const state=loadState(),current=clone(state.db),db=state.db;
+        const stations=db.dashboardx.media.radioStations;
+        if(stations.length>=300)return send(res,409,{error:"Station limit reached"},cors);
+        if(stations.some(s=>s.url===stream.href))return send(res,409,{error:"Station already saved"},cors);
+        const station={id:uid("dxradio"),name,url:stream.href,createdAt:nowIso()};
+        stations.push(station);commitDb(db,current,state.meta);
+        return send(res,201,{ok:true,station},cors);
+      });
+    }
+    const match=pathname.match(/^\\/api\\/dashboardx\\/radio\\/stations\\/([^/]+)$/);
+    if(match&&req.method==="DELETE")return enqueueWrite(async()=>{
+      const state=loadState(),current=clone(state.db),db=state.db;
+      const stations=db.dashboardx.media.radioStations;
+      const index=stations.findIndex(s=>s.id===decodeURIComponent(match[1]));
+      if(index<0)return send(res,404,{error:"Station not found"},cors);
+      stations.splice(index,1);commitDb(db,current,state.meta);
+      return send(res,200,{ok:true},cors);
+    });
+    return send(res,405,{error:"Method not allowed"},cors);
+  }
 
   if(pathname==="/api/health"&&req.method==="GET"){
     const {meta}=loadState();
@@ -791,7 +831,9 @@ async function api(req,res,pathname){
   }
   if(pathname==="/api/admin/import"&&req.method==="POST"){
     const body=await readBody(req),incoming=body.data||body;
-    try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
+    // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
+    if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
+    try{validateDb(incoming)catch(e){return send(res,400,{error:e.message},cors)}
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),meta=state.meta;
       const nextMeta=commitDb(incoming,current,meta);
