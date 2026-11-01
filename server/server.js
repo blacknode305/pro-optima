@@ -110,6 +110,9 @@ function validateDb(db){
   if(!db.dashboardx||typeof db.dashboardx!=="object"||Array.isArray(db.dashboardx))throw new Error("dashboardx must be an object");
   if(!db.dashboardx.media||typeof db.dashboardx.media!=="object"||Array.isArray(db.dashboardx.media))db.dashboardx.media={};
   if(!Array.isArray(db.dashboardx.media.radioStations))db.dashboardx.media.radioStations=[];
+  if(!db.dashboardx.learning||typeof db.dashboardx.learning!=="object"||Array.isArray(db.dashboardx.learning))db.dashboardx.learning={};
+  if(!db.dashboardx.learning.english||typeof db.dashboardx.learning.english!=="object"||Array.isArray(db.dashboardx.learning.english))
+    db.dashboardx.learning.english={schemaVersion:1,revision:0,data:{}};
   return db;
 }
 function loadState(){
@@ -616,6 +619,90 @@ async function api(req,res,pathname){
   if(req.method==="OPTIONS")return send(res,204,"",cors);
 
 
+
+  // Private English learning data owned by DashboardX, not by production orders.
+  // No unauthenticated endpoint returns translations, vocabulary, or progress.
+  // A dedicated revision prevents silent overwrites from multiple devices.
+  if(pathname==="/api/dashboardx/learning/english"){
+    if(!adminOk(req))return send(res,401,{error:"Admin token required"},cors);
+    if(req.method==="GET"){
+      const {db}=loadState();
+      const state=db.dashboardx.learning.english;
+      return send(res,200,{ok:true,revision:Number(state.revision||0),
+        updatedAt:state.updatedAt||null,data:state.data||{}},cors);
+    }
+    if(req.method==="PATCH"){
+      const body=await readBody(req);
+      if(!body||!Number.isSafeInteger(body.baseRevision)||!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))
+        return send(res,400,{error:"Expected baseRevision and changes object"},cors);
+      const allowed=new Set(["done","bookmarks","weak","readingDone","readingDrafts","readingChecks",
+        "savedWords","readingTheme","selected","view","level"]);
+      const changes=body.changes;
+      if(!Object.keys(changes).length||Object.keys(changes).some(key=>!allowed.has(key)))
+        return send(res,400,{error:"Unknown or empty English learning change"},cors);
+      function stringArray(value,max,size=150){
+        if(!Array.isArray(value)||value.length>max||value.some(item=>typeof item!=="string"||item.length>size))
+          throw Error("Invalid learning list");
+        return [...new Set(value)];
+      }
+      function textMap(value,max,keyLimit=80,textLimit=7000){
+        if(!value||typeof value!=="object"||Array.isArray(value)||Object.keys(value).length>max)
+          throw Error("Invalid learning map");
+        const out=Object.create(null);
+        for(const [key,val] of Object.entries(value)){
+          if(key.length>keyLimit||typeof val!=="string"||val.length>textLimit)throw Error("Invalid learning text");
+          Object.defineProperty(out,key,{value:val,enumerable:true,configurable:true,writable:true});
+        }
+        return out;
+      }
+      const clean={};
+      try{
+        for(const [key,val] of Object.entries(changes)){
+          if(["done","bookmarks","readingDone"].includes(key))clean[key]=stringArray(val,500);
+          else if(key==="weak"||key==="readingChecks"){
+            if(!val||typeof val!=="object"||Array.isArray(val)||Object.keys(val).length>500)throw Error("Invalid learning scores");
+            const map=Object.create(null);
+            for(const [name,n] of Object.entries(val)){
+              if(name.length>100||!(typeof n==="boolean"||(Number.isInteger(n)&&n>=0&&n<=10)))
+                throw Error("Invalid learning score");
+              Object.defineProperty(map,name,{value:n,enumerable:true,writable:true,configurable:true});
+            }
+            clean[key]=map;
+          }else if(key==="readingDrafts")clean[key]=textMap(val,200,80,7000);
+          else if(key==="savedWords"){
+            if(!Array.isArray(val)||val.length>1200)throw Error("Too many saved words");
+            clean[key]=val.map(word=>{
+              if(!word||typeof word!=="object"||Array.isArray(word))throw Error("Invalid saved word");
+              const term=String(word.term||"").trim(),translation=String(word.translation||"").trim(),
+                kind=String(word.kind||"").trim(),grammarId=String(word.grammarId||"").trim();
+              if(!term||term.length>120||translation.length>400||kind.length>60||grammarId.length>80)
+                throw Error("Invalid saved word");
+              const attempts=Math.max(0,Math.min(1000,Number(word.attempts)||0));
+              const correct=Math.max(0,Math.min(attempts,Number(word.correct)||0));
+              return {term,translation,kind,grammarId,attempts,correct,
+                addedAt:typeof word.addedAt==="string"?word.addedAt.slice(0,35):nowIso()};
+            });
+          }else{
+            if(typeof val!=="string"||val.length>80)throw Error("Invalid learning setting");
+            clean[key]=val;
+          }
+        }
+      }catch(e){return send(res,400,{error:e.message},cors)}
+      return enqueueWrite(async()=>{
+        const state=loadState(),current=clone(state.db),english=state.db.dashboardx.learning.english;
+        const revision=Number(english.revision||0);
+        if(revision!==body.baseRevision)return send(res,409,{
+          error:"Learning data changed on another device",revision,data:english.data||{}
+        },cors);
+        english.data={...(english.data||{}),...clean};
+        english.revision=revision+1;english.updatedAt=nowIso();
+        commitDb(state.db,current,state.meta);
+        return send(res,200,{ok:true,revision:english.revision,updatedAt:english.updatedAt},cors);
+      });
+    }
+    return send(res,405,{error:"Method not allowed"},cors);
+  }
+
   // DashboardX-owned namespace: can be migrated to an independent DashboardX database.
   if(pathname==="/api/dashboardx/radio/stations" || /^\/api\/dashboardx\/radio\/stations\/[^/]+$/.test(pathname)){
     if(!adminOk(req))return send(res,401,{error:"Admin token required"},cors);
@@ -657,7 +744,10 @@ async function api(req,res,pathname){
   }
   if(pathname==="/api/db"&&req.method==="GET"){
     const {db,meta}=loadState();
-    return send(res,200,{ok:true,revision:meta.revision,updatedAt:meta.updatedAt,data:db},cors);
+    // DashboardX translations and personal vocabulary are private to the authenticated API.
+    const publicDb={...db,dashboardx:{...db.dashboardx}};
+    delete publicDb.dashboardx.learning;
+    return send(res,200,{ok:true,revision:meta.revision,updatedAt:meta.updatedAt,data:publicDb},cors);
   }
 
   if(pathname==="/api/operator/login"&&req.method==="POST"){
