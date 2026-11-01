@@ -845,6 +845,18 @@ async function api(req,res,pathname){
     const payload=Buffer.from(JSON.stringify(db,null,2),"utf8");
     return send(res,200,payload,{...cors,"Content-Type":"application/json; charset=utf-8","Content-Disposition":`attachment; filename="PRO_OPTIMA_backup_${dateInAlmaty()}.json"`});
   }
+  if(pathname==="/api/dashboardx/catalog/upgrade"&&req.method==="POST"){
+    const body=await readBody(req);
+    if(!body||typeof body.update!=="object"||Array.isArray(body.update))return send(res,400,{error:"Missing upgrade payload"},cors);
+    if(!Number.isFinite(Number(body.baseRevision)))return send(res,400,{error:"Missing base revision"},cors);
+    return enqueueWrite(async()=>{
+      const state=loadState(),current=clone(state.db),db=state.db,meta=state.meta;
+      if(Number(body.baseRevision)!==Number(meta.revision))return send(res,409,{error:"Конфликт версии. Обновите каталог и повторите импорт.",revision:meta.revision},cors);
+      let summary;try{summary=applySupplierUpdate(db,body.update)}catch(e){return send(res,400,{error:e.message},cors)}
+      const nextMeta=commitDb(db,current,meta);
+      return send(res,200,{ok:true,summary,revision:nextMeta.revision},cors);
+    });
+  }
   if(pathname==="/api/admin/apply-update"&&req.method==="POST"){
     const update=await readBody(req);
     return enqueueWrite(async()=>{
