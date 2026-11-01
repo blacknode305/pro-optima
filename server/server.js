@@ -636,7 +636,7 @@ async function api(req,res,pathname){
       if(!body||!Number.isSafeInteger(body.baseRevision)||!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))
         return send(res,400,{error:"Expected baseRevision and changes object"},cors);
       const allowed=new Set(["done","bookmarks","weak","readingDone","readingDrafts","readingChecks",
-        "savedWords","readingTheme","selected","view","level"]);
+        "savedWords","readingTheme","selected","view","level","phoneticsDone"]);
       const changes=body.changes;
       if(!Object.keys(changes).length||Object.keys(changes).some(key=>!allowed.has(key)))
         return send(res,400,{error:"Unknown or empty English learning change"},cors);
@@ -658,7 +658,7 @@ async function api(req,res,pathname){
       const clean={};
       try{
         for(const [key,val] of Object.entries(changes)){
-          if(["done","bookmarks","readingDone"].includes(key))clean[key]=stringArray(val,500);
+          if(["done","bookmarks","readingDone","phoneticsDone"].includes(key))clean[key]=stringArray(val,500);
           else if(key==="weak"||key==="readingChecks"){
             if(!val||typeof val!=="object"||Array.isArray(val)||Object.keys(val).length>500)throw Error("Invalid learning scores");
             const map=Object.create(null);
