@@ -1030,6 +1030,12 @@ async function api(req,res,pathname){
         return send(res,409,{error:"Конфликт версии. Сначала загрузите свежую базу.",revision:meta.revision,updatedAt:meta.updatedAt},cors);
       }
       if(!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))return send(res,400,{error:"changes должен быть объектом."},cors);
+      if(Array.isArray(body.changes.suppliers)){
+        const remaining=new Set(body.changes.suppliers.map(x=>String(x?.id)));
+        const removed=new Set(db.suppliers.filter(s=>!remaining.has(String(s.id))).map(s=>String(s.id)));
+        if(db.declarations.some(d=>removed.has(String(d.supplierId))))
+          return send(res,409,{error:"Нельзя удалить поставщика: к нему прикреплены декларации. Сначала перенесите или удалите эти записи."},cors);
+      }
       for(const [key,value] of Object.entries(body.changes)){if(ALLOWED_TOP_LEVEL.has(key))db[key]=value}
       try{validateDb(db)}catch(e){return send(res,400,{error:e.message},cors)}
       const nextMeta=commitDb(db,current,meta);
@@ -1043,6 +1049,9 @@ async function api(req,res,pathname){
     if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
     if(incoming&&incoming.declarations===undefined)incoming.declarations=clone(loadState().db.declarations);
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
+    const ids=new Set(incoming.suppliers.map(s=>String(s.id)));
+    if(incoming.declarations.some(d=>!ids.has(String(d.supplierId))))
+      return send(res,409,{error:"Импорт удалит поставщиков с сохранёнными декларациями. Исправьте соответствия поставщиков."},cors);
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),meta=state.meta;
       const nextMeta=commitDb(incoming,current,meta);
