@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
+const branchRegistry = require("./branchRegistry.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -99,6 +100,7 @@ function validateDb(db){
   if(db.settings!==undefined && (!db.settings || typeof db.settings!=="object" || Array.isArray(db.settings))){
     throw new Error("settings must be an object.");
   }
+  if(db.branches!==undefined&&(!Array.isArray(db.branches)||db.branches.some(x=>typeof x!=="string")))throw new Error("branches must be an array of names.");
   if(!Array.isArray(db.supplierCatalog)) db.supplierCatalog=[];
   if(!Array.isArray(db.offers)) db.offers=[];
   if(!Array.isArray(db.history)) db.history=[];
@@ -240,7 +242,9 @@ function readBody(req){
 }
 
 function branchesFromDb(db){
-  const fixed=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
+  // Once the branch manager has created its registry, deleted or renamed branches must not reappear.
+  if(Array.isArray(db.branches))return [...new Map(db.branches.filter(Boolean).map(x=>[branchKey(x),x])).values()];
+  const fixed=branchRegistry.LEGACY_BRANCHES;
   const extra=ensureArray(db.suppliers).flatMap(s=>ensureArray(s.schedules).map(x=>String(x.branch||"").trim())).filter(Boolean);
   const out=[],seen=new Set();
   for(const branch of [...fixed,...extra]){
@@ -902,6 +906,55 @@ async function api(req,res,pathname){
 
   if(!adminOk(req))return send(res,401,{error:"Неверный или отсутствующий Admin token."},cors);
 
+  if(pathname==="/api/dashboardx/branches"&&req.method==="GET"){
+    const {db,meta}=loadState();
+    return send(res,200,{ok:true,revision:meta.revision,...branchRegistry.discover(db,loadAccess())},cors);
+  }
+  if(pathname==="/api/dashboardx/branches/preview"&&req.method==="POST"){
+    const body=await readBody(req),{db,meta}=loadState();
+    if(!Number.isSafeInteger(Number(body.baseRevision))||Number(body.baseRevision)!==Number(meta.revision))
+      return send(res,409,{error:"База изменилась. Обновите филиалы и повторите.",revision:meta.revision},cors);
+    let plan;
+    try{plan=branchRegistry.planBranchChange(db,loadAccess(),body);}
+    catch(e){return send(res,400,{error:e.message},cors);}
+    const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report})).digest("hex");
+    return send(res,200,{ok:true,revision:meta.revision,previewHash:hash,...plan.report},cors);
+  }
+  if(pathname==="/api/dashboardx/branches/apply"&&req.method==="POST"){
+    const body=await readBody(req);
+    return enqueueWrite(async()=>{
+      const state=loadState(),current=clone(state.db),meta=state.meta,originalAccess=loadAccess();
+      if(!Number.isSafeInteger(Number(body.baseRevision))||Number(body.baseRevision)!==Number(meta.revision))
+        return send(res,409,{error:"Конфликт версии. Обновите филиалы и просмотрите изменения повторно.",revision:meta.revision},cors);
+      let plan;
+      try{plan=branchRegistry.planBranchChange(state.db,originalAccess,body);}
+      catch(e){return send(res,400,{error:e.message},cors);}
+      const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report})).digest("hex");
+      if(!body.previewHash||!timingSafeEqualText(String(body.previewHash),hash))
+        return send(res,409,{error:"План изменился. Просмотрите последствия операции ещё раз."},cors);
+      if(!plan.report.allowed)return send(res,409,{error:"Обнаружены конфликты. Данные не изменены.",conflicts:plan.report.conflicts},cors);
+      // Both the database and branch credential store are backed up BEFORE any mutation.
+      const originalMeta=clone(meta),accessChanged=JSON.stringify(plan.access)!==JSON.stringify(originalAccess);
+      const stamp=nowIso().replace(/[:.]/g,"-")+"-branches-"+crypto.randomBytes(3).toString("hex");
+      try{
+        validateDb(plan.db);
+        backupCurrent(current,meta.revision);
+        fs.writeFileSync(path.join(BACKUP_DIR,stamp+"_access.json"),JSON.stringify(originalAccess,null,2),"utf8");
+        if(accessChanged)writeJsonAtomic(ACCESS_FILE,plan.access);
+        writeJsonAtomic(DB_FILE,plan.db);
+        const nextMeta={revision:Number(meta.revision||0)+1,updatedAt:nowIso()};
+        writeJsonAtomic(META_FILE,nextMeta);
+        return send(res,200,{ok:true,revision:nextMeta.revision,summary:plan.report.changes},cors);
+      }catch(e){
+        // Best-effort rollback if either store failed to commit; backups remain available.
+        try{writeJsonAtomic(DB_FILE,current);writeJsonAtomic(ACCESS_FILE,originalAccess);writeJsonAtomic(META_FILE,originalMeta);}catch(rollbackError){
+          console.error("[SOPTIMA] Branch migration rollback failed:",rollbackError);
+        }
+        console.error("[SOPTIMA] Branch migration failed:",e);
+        return send(res,500,{error:"Не удалось сохранить изменения. Резервные копии сохранены."},cors);
+      }
+    });
+  }
   if(pathname==="/api/admin/db"&&req.method==="GET"){
     const {db,meta}=loadState();return send(res,200,{ok:true,revision:meta.revision,updatedAt:meta.updatedAt,data:db},cors);
   }
@@ -923,6 +976,7 @@ async function api(req,res,pathname){
     const body=await readBody(req),incoming=body.data||body;
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
+    if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),meta=state.meta;
