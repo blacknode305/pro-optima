@@ -94,7 +94,7 @@ function validateDb(db){
   for(const key of ["suppliers","products"]){
     if(!Array.isArray(db[key])) throw new Error(`${key} must be an array.`);
   }
-  for(const key of ["supplierCatalog","offers","history","stocks","transfers","dateRequests"]){
+  for(const key of ["supplierCatalog","offers","history","stocks","transfers","dateRequests","declarations"]){
     if(db[key]!==undefined && !Array.isArray(db[key])) throw new Error(`${key} must be an array.`);
   }
   if(db.settings!==undefined && (!db.settings || typeof db.settings!=="object" || Array.isArray(db.settings))){
@@ -107,6 +107,7 @@ function validateDb(db){
   if(!Array.isArray(db.stocks)) db.stocks=[];
   if(!Array.isArray(db.transfers)) db.transfers=[];
   if(!Array.isArray(db.dateRequests)) db.dateRequests=[];
+  if(!Array.isArray(db.declarations)) db.declarations=[];
   if(!db.settings || typeof db.settings!=="object") db.settings={};
   if(db.dashboardx===undefined)db.dashboardx={schemaVersion:1,media:{radioStations:[]}};
   if(!db.dashboardx||typeof db.dashboardx!=="object"||Array.isArray(db.dashboardx))throw new Error("dashboardx must be an object");
@@ -120,7 +121,7 @@ function validateDb(db){
 function loadState(){
   const db = validateDb(readJson(DB_FILE,{
     version:23,suppliers:[],products:[],supplierCatalog:[],offers:[],history:[],stocks:[],
-    transfers:[],dateRequests:[],settings:{}
+    transfers:[],dateRequests:[],declarations:[],settings:{}
   }));
   const meta = readJson(META_FILE,{revision:1,updatedAt:nowIso()});
   return {db,meta};
@@ -151,6 +152,26 @@ function commitDb(next, current, meta){
   writeJsonAtomic(DB_FILE,next);
   writeJsonAtomic(META_FILE,nextMeta);
   return nextMeta;
+}
+
+
+const declarationDate=value=>{
+  const text=String(value||"");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return false;
+  const d=new Date(text+"T12:00:00Z");
+  return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===text;
+};
+function validateDeclarationInput(value,db){
+  if(!value||typeof value!=="object"||Array.isArray(value))throw Error("Некорректная запись декларации.");
+  const supplierId=String(value.supplierId??"").trim();
+  const productType=String(value.productType??"").trim().replace(/\s+/g," ");
+  const startDate=String(value.startDate??"");
+  const endDate=String(value.endDate??"");
+  if(!supplierId||!ensureArray(db.suppliers).some(s=>String(s.id)===supplierId))throw Error("Выберите существующего поставщика.");
+  if(productType.length<2||productType.length>180)throw Error("Категория продукции должна содержать 2–180 символов.");
+  if(!declarationDate(startDate)||!declarationDate(endDate))throw Error("Укажите корректные даты действия.");
+  if(endDate<startDate)throw Error("Дата окончания не может быть раньше даты начала.");
+  return {supplierId,productType,startDate,endDate};
 }
 
 function timingSafeEqualText(a,b){
@@ -623,7 +644,7 @@ function applySupplierUpdate(db,update){
 }
 
 const ALLOWED_TOP_LEVEL=new Set([
-  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","settings","dashboardx"
+  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","declarations","settings","dashboardx"
 ]);
 
 async function api(req,res,pathname){
@@ -963,6 +984,41 @@ async function api(req,res,pathname){
       }
     });
   }
+  if(pathname==="/api/dashboardx/declarations"&&req.method==="POST"){
+    const body=await readBody(req);
+    return enqueueWrite(async()=>{
+      const state=loadState(),db=state.db,meta=state.meta,current=clone(db);
+      if(!Number.isSafeInteger(body?.baseRevision)||Number(body.baseRevision)!==Number(meta.revision))
+        return send(res,409,{error:"База изменилась. Обновите декларации и повторите действие.",revision:meta.revision},cors);
+      const action=String(body.action||"");
+      if(action==="save"){
+        let data;
+        try{data=validateDeclarationInput(body.declaration,db);}
+        catch(error){return send(res,400,{error:error.message},cors);}
+        const id=String(body.declaration?.id??"").trim();
+        const index=id?db.declarations.findIndex(x=>String(x.id)===id):-1;
+        if(id&&index===-1)return send(res,404,{error:"Декларация не найдена. Обновите список."},cors);
+        const duplicate=db.declarations.some((x,i)=>i!==index&&
+          String(x.supplierId)===data.supplierId&&normalize(x.productType)===normalize(data.productType)&&
+          x.startDate===data.startDate&&x.endDate===data.endDate);
+        if(duplicate)return send(res,409,{error:"Такая декларация с теми же сроками уже сохранена."},cors);
+        const old=index>=0?db.declarations[index]:null;
+        const entry={id:old?.id||uid("decl"),...data,createdAt:old?.createdAt||nowIso(),updatedAt:nowIso()};
+        if(index>=0)db.declarations[index]=entry;else db.declarations.push(entry);
+        const nextMeta=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:nextMeta.revision,declaration:entry},cors);
+      }
+      if(action==="delete"){
+        const id=String(body.id??"").trim();
+        const index=db.declarations.findIndex(x=>String(x.id)===id);
+        if(!id||index<0)return send(res,404,{error:"Декларация не найдена. Обновите список."},cors);
+        db.declarations.splice(index,1);
+        const nextMeta=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:nextMeta.revision,id},cors);
+      }
+      return send(res,400,{error:"Операция с декларацией не поддерживается."},cors);
+    });
+  }
   if(pathname==="/api/admin/db"&&req.method==="GET"){
     const {db,meta}=loadState();return send(res,200,{ok:true,revision:meta.revision,updatedAt:meta.updatedAt,data:db},cors);
   }
@@ -985,6 +1041,7 @@ async function api(req,res,pathname){
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
     if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
+    if(incoming&&incoming.declarations===undefined)incoming.declarations=clone(loadState().db.declarations);
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),meta=state.meta;
