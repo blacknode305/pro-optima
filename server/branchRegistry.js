@@ -165,7 +165,7 @@ function planBranchChange(originalDb,originalAccess,operation){
       }else seen.set(k,{schedule,i});
     }
     if(action!=="add"&&action!=="delete"){
-      for(const i of identical.reverse()){schedules.splice(i,1);changes.collapsedSchedules++;}
+      for(const i of identical.reverse()){schedules.splice(i,1);changes.collapsedSchedules++;note(["suppliers",si,"schedules",i],"совпадающий график");}
     }
   }
   // Access credentials are independent of the DB. Never overwrite a PIN hash or silently combine access.
@@ -176,6 +176,7 @@ function planBranchChange(originalDb,originalAccess,operation){
     const next={};
     for(const [k,v] of Object.entries(access.branches||{})){
       const renamed=applicable(k)?target:k;
+      if(renamed!==k)note(["access","branches",k],"ключ доступа");
       const existing=Object.keys(next).find(x=>key(x)===key(renamed));
       if(existing!==undefined){
         if(equal(next[existing],v))changes.collapsedMaps++;
@@ -184,7 +185,7 @@ function planBranchChange(originalDb,originalAccess,operation){
     }
     access.branches=next;
   }
-  if(action==="add"||action==="delete")changes.total++;
+  note(["branches"],action==="add"?"добавление":action==="delete"?"удаление":action==="merge"?"объединение":"переименование");
   return {db,access,report:{action,source,target,changes,conflicts,registry:db.branches,allowed:conflicts.length===0}};
 }
 module.exports={LEGACY_BRANCHES,key,name,discover,planBranchChange};
