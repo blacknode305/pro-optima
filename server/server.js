@@ -917,7 +917,7 @@ async function api(req,res,pathname){
     let plan;
     try{plan=branchRegistry.planBranchChange(db,loadAccess(),body);}
     catch(e){return send(res,400,{error:e.message},cors);}
-    const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report})).digest("hex");
+    const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report,access:plan.access})).digest("hex");
     return send(res,200,{ok:true,revision:meta.revision,previewHash:hash,...plan.report},cors);
   }
   if(pathname==="/api/dashboardx/branches/apply"&&req.method==="POST"){
@@ -929,7 +929,7 @@ async function api(req,res,pathname){
       let plan;
       try{plan=branchRegistry.planBranchChange(state.db,originalAccess,body);}
       catch(e){return send(res,400,{error:e.message},cors);}
-      const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report})).digest("hex");
+      const hash=crypto.createHash("sha256").update(JSON.stringify({revision:meta.revision,report:plan.report,access:plan.access})).digest("hex");
       if(!body.previewHash||!timingSafeEqualText(String(body.previewHash),hash))
         return send(res,409,{error:"План изменился. Просмотрите последствия операции ещё раз."},cors);
       if(!plan.report.allowed)return send(res,409,{error:"Обнаружены конфликты. Данные не изменены.",conflicts:plan.report.conflicts},cors);
@@ -1021,8 +1021,10 @@ async function api(req,res,pathname){
     const {db}=loadState();
     if(!branchesFromDb(db).some(x=>sameBranch(x,branch)))return send(res,400,{error:"Неизвестное производство."},cors);
     if(pin.length<4)return send(res,400,{error:"Пароль производства должен быть минимум 4 символа."},cors);
-    const access=loadAccess();setBranchPin(access,branch,pin);access.updatedAt=nowIso();writeJsonAtomic(ACCESS_FILE,access);
-    return send(res,200,{ok:true,branch},cors);
+    return enqueueWrite(async()=>{
+      const access=loadAccess();setBranchPin(access,branch,pin);access.updatedAt=nowIso();writeJsonAtomic(ACCESS_FILE,access);
+      return send(res,200,{ok:true,branch},cors);
+    });
   }
   if(pathname==="/api/admin/date-requests"&&req.method==="GET"){
     const {db}=loadState();
