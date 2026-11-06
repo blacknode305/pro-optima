@@ -36,7 +36,7 @@ function discover(db,access){
       return;
     }
     for(const [prop,v] of Object.entries(value)){
-      if(skipKeys.has(prop))continue;
+      if(skipKeys.has(prop)||prop==="branches"&&parts.length===0)continue;
       if(typeof v==="string"&&branchFields.has(prop))add(v,[...parts,prop],"field");
       else if(Array.isArray(v))visit(v,[...parts,prop],prop);
       else if(v&&typeof v==="object"){
@@ -152,7 +152,7 @@ function planBranchChange(originalDb,originalAccess,operation){
     if(!schedules)continue;
     for(let i=0;i<schedules.length;i++){
       const schedule=schedules[i],k=key(schedule?.branch);
-      if(!k)continue;
+      if(action==="add"||action==="delete"||k!==targetKey)continue;
       if(seen.has(k)){
         const prior=seen.get(k),one={...prior.schedule},two={...schedule};
         delete one.branch;delete two.branch;
