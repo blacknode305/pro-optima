@@ -146,10 +146,13 @@ function planBranchChange(originalDb,originalAccess,operation){
     const used=original.branches.filter(b=>key(b.name)===sourceKey).reduce((n,b)=>n+b.count,0);
     if(used)conflict(["branches",source],"У филиала есть "+used+" связанных записей. Перенесите их через объединение.");
   }else if(action!=="add")walk(db,[],"");
-  // One schedule for one supplier/branch. Conflicting duplicates cannot be resolved by guessing.
+  // One supplier must not end up with duplicate schedules. Remove only exact duplicates;
+  // never guess which of two different schedules is correct.
+  changes.collapsedSchedules=0;
   for(let si=0;si<(db.suppliers||[]).length;si++){
     const supplier=db.suppliers[si],seen=new Map(),schedules=Array.isArray(supplier?.schedules)?supplier.schedules:null;
     if(!schedules)continue;
+    const identical=[];
     for(let i=0;i<schedules.length;i++){
       const schedule=schedules[i],k=key(schedule?.branch);
       if(action==="add"||action==="delete"||k!==targetKey)continue;
@@ -157,7 +160,11 @@ function planBranchChange(originalDb,originalAccess,operation){
         const prior=seen.get(k),one={...prior.schedule},two={...schedule};
         delete one.branch;delete two.branch;
         if(!equal(one,two))conflict(["suppliers",si,"schedules",i],"У поставщика два разных графика для одного филиала. Сведения сохранены; объединение заблокировано.");
+        else identical.push(i);
       }else seen.set(k,{schedule,i});
+    }
+    if(action!=="add"&&action!=="delete"){
+      for(const i of identical.reverse()){schedules.splice(i,1);changes.collapsedSchedules++;}
     }
   }
   // Access credentials are independent of the DB. Never overwrite a PIN hash or silently combine access.
