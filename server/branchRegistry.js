@@ -168,6 +168,38 @@ function planBranchChange(originalDb,originalAccess,operation){
       for(const i of identical.reverse()){schedules.splice(i,1);changes.collapsedSchedules++;note(["suppliers",si,"schedules",i],"совпадающий график");}
     }
   }
+  // A merge must not silently hide different per-branch prices or stock snapshots.
+  // Entries with different IDs stay untouched; incompatible overlaps require a human decision.
+  if(action==="merge"||action==="rename"){
+    const inspectOverlap=(section,identity,substance,reason)=>{
+      const seen=new Map(),records=Array.isArray(db[section])?db[section]:[];
+      for(let i=0;i<records.length;i++){
+        const row=records[i],before=originalDb[section]?.[i];
+        if(!row||!before||key(row.branch)!==targetKey)continue;
+        const id=identity(row),origin=norm(before.branch);
+        if(!id||!origin)continue;
+        const prev=seen.get(id);
+        if(prev&&prev.origin!==origin&&!equal(prev.value,substance(row))){
+          conflict([section,i],reason+" ("+prev.index+" и "+i+").");
+        }else if(!prev)seen.set(id,{origin,value:substance(row),index:i});
+      }
+    };
+    inspectOverlap("stocks",
+      row=>String(row.productId??"")+"|"+String(row.date??"")+"|"+targetKey,
+      row=>({value:row.value,unit:row.unit}),
+      "У разных названий филиала разные остатки одного товара за одну дату");
+    inspectOverlap("offers",
+      row=>String(row.supplierId??"")+"|"+String(row.productId??"")+"|"+norm(row.unit)+"|"+targetKey,
+      row=>({price:row.price,manualActive:row.manualActive,manualActiveByBranch:row.manualActiveByBranch}),
+      "У поставщика разные предложения для одного товара и филиала");
+    for(let i=0;i<(db.transfers||[]).length;i++){
+      const tr=db.transfers[i],before=originalDb.transfers?.[i];
+      if(!tr||!before)continue;
+      if(key(tr.requesterBranch)===key(tr.fromBranch)&&key(before.requesterBranch)!==key(before.fromBranch)){
+        conflict(["transfers",i],"Перемещение между двумя разными филиалами станет перемещением внутри одного. Нужна ручная проверка.");
+      }
+    }
+  }
   // Access credentials are independent of the DB. Never overwrite a PIN hash or silently combine access.
   if(action==="delete"){
     for(const k of Object.keys(access.branches||{}))if(applicable(k))conflict(["access","branches",k],"Для филиала настроен доступ. Переносите через объединение.");
