@@ -20,7 +20,7 @@ function discover(db,access){
     const section=path[0],record=Number.isInteger(path[1])?db?.[section]?.[path[1]]:null;
     if(section==="access")return "Доступ производства";
     if(!record||typeof record!=="object")return "";
-    const safe=v=>String(v??"").replace(/\\s+/g," ").trim().slice(0,75);
+    const safe=v=>String(v??"").replace(/\s+/g," ").trim().slice(0,75);
     if(section==="suppliers")return "Поставщик «"+safe(record.name)+"»";
     if(section==="products")return "Сырьё «"+safe(record.name)+"»";
     if(section==="supplierCatalog")return "Каталог: "+safe(record.name);
