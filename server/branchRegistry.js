@@ -65,7 +65,7 @@ function planBranchChange(originalDb,originalAccess,operation){
   const find=x=>original.branches.some(b=>key(b.name)===key(x));
   if(action!=="add"&&!find(source))throw Error("Исходный филиал не найден.");
   if(action==="add"&&find(target))throw Error("Такой филиал уже существует. Выберите объединение.");
-  if(action==="merge"&&(!find(target)||key(source)===key(target)))throw Error("Для объединения выберите другой существующий филиал.");
+  if(action==="merge"&&(!find(target)||norm(source)===norm(target)))throw Error("Для объединения выберите другое существующее название.");
   if(action==="rename"&&key(source)===key(target)&&norm(source)===norm(target))throw Error("Название не изменилось.");
   const sourceKey=key(source),targetKey=key(target);
   const conflicts=[],changes={total:0,bySection:{},examples:[],collapsedLists:0,collapsedMaps:0};
