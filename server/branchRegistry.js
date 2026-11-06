@@ -16,6 +16,21 @@ const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const pathLabel=parts=>parts.map((p,i)=>typeof p==="number"?"["+p+"]":(i?".":"")+p).join("");
 function discover(db,access){
   const entries=new Map();
+  const describePath=path=>{
+    const section=path[0],record=Number.isInteger(path[1])?db?.[section]?.[path[1]]:null;
+    if(section==="access")return "Доступ производства";
+    if(!record||typeof record!=="object")return "";
+    const safe=v=>String(v??"").replace(/\\s+/g," ").trim().slice(0,75);
+    if(section==="suppliers")return "Поставщик «"+safe(record.name)+"»";
+    if(section==="products")return "Сырьё «"+safe(record.name)+"»";
+    if(section==="supplierCatalog")return "Каталог: "+safe(record.name);
+    if(section==="offers")return "Предложение: товар #"+safe(record.productId)+", поставщик #"+safe(record.supplierId);
+    if(section==="history")return "Заявка #"+safe(record.id)+" · "+safe(record.requestDate);
+    if(section==="stocks")return "Остаток: товар #"+safe(record.productId)+" · "+safe(record.date);
+    if(section==="transfers")return "Перемещение #"+safe(record.id);
+    if(section==="dateRequests")return "Запрос #"+safe(record.id);
+    return "";
+  };
   const add=(value,path,kind)=>{
     if(typeof value!=="string"||!value.trim()||value==="*")return;
     const raw=value.trim().replace(/\s+/g," "),id=norm(raw);
@@ -25,7 +40,7 @@ function discover(db,access){
     if(kind==="registry"){item.registered=true;return;}
     item.count++;const section=path[0]||"other";
     item.usage[section]=(item.usage[section]||0)+1;
-    if(item.examples.length<8)item.examples.push(pathLabel(path));
+    if(item.examples.length<8){const info=describePath(path);item.examples.push((info?info+" · ":"")+pathLabel(path));}
   };
   const visit=(value,parts,parent)=>{
     if(!value||typeof value!=="object")return;
