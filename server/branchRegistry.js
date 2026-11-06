@@ -3,7 +3,7 @@
 // No data are written by this module; the server commits only a reviewed plan.
 const LEGACY_BRANCHES=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
 const canonicalNames={"горняк":"Горняк","лободы":"Лободы","нуркена":"Нуркена","сарань":"Сарань","пришахтинск":"Пришахтинск","ермекова":"Ермекова","анжерская":"Анжерская"};
-const branchFields=new Set(["branch","fromBranch","toBranch","sourceBranch","targetBranch","deliveryBranch","orderBranch","productionBranch","branchName","originBranch","destinationBranch","defaultBranch","selectedBranch","preferredBranch","currentBranch"]);
+const branchFields=new Set(["branch","fromBranch","toBranch","sourceBranch","targetBranch","deliveryBranch","orderBranch","productionBranch","requesterBranch","branchName","originBranch","destinationBranch","defaultBranch","selectedBranch","preferredBranch","currentBranch"]);
 const branchArrays=new Set(["excludedBranches","allowedBranches","activeBranches","disabledBranches","productionBranches","includedBranches","branches"]);
 const branchMaps=new Set(["manualActiveByBranch","byBranch","branchSettings","branchStocks","stockByBranch","quantitiesByBranch","pricesByBranch","availabilityByBranch","branchPrices","branches"]);
 const skipKeys=new Set(["branchId","branchIds","gitBranch"]);
