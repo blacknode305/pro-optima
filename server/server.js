@@ -254,6 +254,14 @@ function branchesFromDb(db){
   }
   return out;
 }
+function registeredBranch(db,value){
+  const requested=String(value??"").trim();
+  return branchesFromDb(db).find(x=>sameBranch(x,requested))||canonicalBranch(requested);
+}
+function branchAccessRecord(access,branch){
+  const found=Object.entries(access.branches||{}).find(([name])=>sameBranch(name,branch));
+  return found?found[1]:null;
+}
 function scheduleFor(supplier,branch){
   return ensureArray(supplier?.schedules).find(x=>sameBranch(x.branch,branch))||null;
 }
@@ -470,10 +478,10 @@ function excludeUnusedProductsForBranch(db,branch,items){
     if(!product)continue;
     const next=[];
     for(const raw of ensureArray(product.excludedBranches)){
-      const name=canonicalBranch(raw);
+      const name=registeredBranch(db,raw);
       if(name&&!next.some(x=>sameBranch(x,name)))next.push(name);
     }
-    const canonical=canonicalBranch(branch);
+    const canonical=registeredBranch(db,branch);
     if(canonical&&!next.some(x=>sameBranch(x,canonical))){next.push(canonical);changed++}
     product.excludedBranches=next;
   }
@@ -756,10 +764,10 @@ async function api(req,res,pathname){
 
   if(pathname==="/api/operator/login"&&req.method==="POST"){
     const body=await readBody(req);
-    const branch=canonicalBranch(body.branch),pin=String(body.pin||"");
     const {db}=loadState();
+    const branch=registeredBranch(db,body.branch),pin=String(body.pin||"");
     if(!branchesFromDb(db).some(x=>sameBranch(x,branch)))return send(res,400,{error:"Неизвестное производство."},cors);
-    const access=loadAccess(),rec=access.branches[branch];
+    const access=loadAccess(),rec=branchAccessRecord(access,branch);
     if(!rec)return send(res,403,{error:"Для этого производства пароль ещё не задан администратором."},cors);
     if(!timingSafeEqualText(hashPin(pin,rec.salt),rec.pinHash))return send(res,403,{error:"Неверный пароль производства."},cors);
     const exp=Date.now()+BRANCH_SESSION_HOURS*3600*1000;
@@ -1012,7 +1020,7 @@ async function api(req,res,pathname){
   }
   if(pathname==="/api/admin/access"&&req.method==="GET"){
     const {db}=loadState(),access=loadAccess();
-    const rows=branchesFromDb(db).map(branch=>({branch,configured:!!access.branches[branch],updatedAt:access.branches[branch]?.updatedAt||null}));
+    const rows=branchesFromDb(db).map(branch=>({branch,configured:!!branchAccessRecord(access,branch),updatedAt:branchAccessRecord(access,branch)?.updatedAt||null}));
     return send(res,200,{ok:true,branches:rows},cors);
   }
   if(pathname==="/api/admin/access"&&req.method==="PUT"){
@@ -1022,7 +1030,10 @@ async function api(req,res,pathname){
     if(!branchesFromDb(db).some(x=>sameBranch(x,branch)))return send(res,400,{error:"Неизвестное производство."},cors);
     if(pin.length<4)return send(res,400,{error:"Пароль производства должен быть минимум 4 символа."},cors);
     return enqueueWrite(async()=>{
-      const access=loadAccess();setBranchPin(access,branch,pin);access.updatedAt=nowIso();writeJsonAtomic(ACCESS_FILE,access);
+      const access=loadAccess();
+      const old=Object.keys(access.branches).find(name=>sameBranch(name,branch));
+      if(old!==undefined&&old!==branch){access.branches[branch]=access.branches[old];delete access.branches[old];}
+      setBranchPin(access,branch,pin);access.updatedAt=nowIso();writeJsonAtomic(ACCESS_FILE,access);
       return send(res,200,{ok:true,branch},cors);
     });
   }
