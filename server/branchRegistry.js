@@ -3,10 +3,11 @@
 // No data are written by this module; the server commits only a reviewed plan.
 const LEGACY_BRANCHES=["Лободы","Нуркена","Горняк","Пришахтинск","Сарань","Ермекова","Анжерская"];
 const canonicalNames={"горняк":"Горняк","лободы":"Лободы","нуркена":"Нуркена","сарань":"Сарань","пришахтинск":"Пришахтинск","ермекова":"Ермекова","анжерская":"Анжерская"};
-const branchFields=new Set(["branch","fromBranch","toBranch","sourceBranch","targetBranch","deliveryBranch","orderBranch","productionBranch","branchName","originBranch","destinationBranch"]);
+const branchFields=new Set(["branch","fromBranch","toBranch","sourceBranch","targetBranch","deliveryBranch","orderBranch","productionBranch","branchName","originBranch","destinationBranch","defaultBranch","selectedBranch","preferredBranch","currentBranch"]);
 const branchArrays=new Set(["excludedBranches","allowedBranches","activeBranches","disabledBranches","productionBranches","includedBranches","branches"]);
 const branchMaps=new Set(["manualActiveByBranch","byBranch","branchSettings","branchStocks","stockByBranch","quantitiesByBranch","pricesByBranch","availabilityByBranch","branchPrices","branches"]);
-const skipKeys=new Set(["branchId","branchIds","gitBranch","defaultBranch"]);
+const skipKeys=new Set(["branchId","branchIds","gitBranch"]);
+const isBranchMap=prop=>branchMaps.has(prop)||/^(?:\w*branches|\w*bybranch|\w*branchmap|\w*branchdata)$/i.test(prop);
 const norm=v=>String(v??"").trim().replace(/\s+/g," ").toLocaleLowerCase("ru-RU");
 const key=v=>{const k=norm(v);if(k==="нуркен"||k==="нуркена")return "нуркена";if(k==="анжерского")return "анжерская";return k;};
 const name=v=>canonicalNames[key(v)]||String(v??"").trim().replace(/\s+/g," ");
@@ -40,7 +41,7 @@ function discover(db,access){
       if(typeof v==="string"&&branchFields.has(prop))add(v,[...parts,prop],"field");
       else if(Array.isArray(v))visit(v,[...parts,prop],prop);
       else if(v&&typeof v==="object"){
-        if(branchMaps.has(prop))for(const mapKey of Object.keys(v))add(mapKey,[...parts,prop,mapKey],"map");
+        if(isBranchMap(prop))for(const mapKey of Object.keys(v))add(mapKey,[...parts,prop,mapKey],"map");
         visit(v,[...parts,prop],prop);
       }
     }
@@ -124,7 +125,7 @@ function planBranchChange(originalDb,originalAccess,operation){
       if(typeof v==="string"&&branchFields.has(p))obj[p]=changeValue(v,[...parts,p]);
       else if(Array.isArray(v))walk(v,[...parts,p],p);
       else if(v&&typeof v==="object"){
-        if(branchMaps.has(p)){
+        if(isBranchMap(p)){
           const map={};
           for(const [mapKey,data] of Object.entries(v)){
             const renamed=action!=="delete"&&applicable(mapKey)?target:mapKey;
