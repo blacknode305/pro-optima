@@ -39,7 +39,7 @@ function normalizeRecord(data,db,old=null){
     documentNumber:130,applicantName:190,manufacturerName:190,originCountry:90,
     productDescription:700,technicalRegulations:200,registrationDate:10,issueDate:10,
     qrUrl:900,recipientName:190,batchDetails:500,quantityPlaces:50,netWeight:70,
-    receiptDate:10,notes:1200,supplierNameHint:190
+    receiptDate:10,receiptReference:120,notes:1200,supplierNameHint:190
   };
   const extra={};
   for(const [name,max] of Object.entries(fields)){
