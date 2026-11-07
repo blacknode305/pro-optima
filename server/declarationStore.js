@@ -53,12 +53,25 @@ function normalizeRecord(data,db,old=null){
     }
     extra[name]=value;
   }
+  const replacesId=limit(old?.replacesId||data.replacesId,100);
+  if(replacesId){
+    const previous=db.declarations.find(x=>String(x.id)===replacesId);
+    if(!previous||String(previous.id)===String(old?.id||""))throw Error("Документ, который заменяется, не найден.");
+    if((previous.documentType||"eaeu")!==documentType)throw Error("Тип нового документа должен совпадать с заменяемым.");
+    if(previous.supplierId&&supplierId&&String(previous.supplierId)!==supplierId)
+      throw Error("Новый документ должен относиться к тому же поставщику.");
+  }
   const importSourceId=limit(old?.importSourceId||data.importSourceId,160);
   const qrPresent=Boolean(data.qrPresent??old?.qrPresent);
   return {
     id:old?.id||crypto.randomUUID(),documentType,reviewStatus,
     supplierId:supplierId||null,productType,startDate,endDate,...extra,
-    qrPresent,importSourceId,attachments:Array.isArray(old?.attachments)?old.attachments.slice():[],
+    qrPresent,importSourceId,replacesId,
+    archivedAt:old?.archivedAt||null,
+    archiveReason:old?.archiveReason||"",
+    archiveNote:old?.archiveNote||"",
+    replacementRequestedAt:old?.replacementRequestedAt||null,
+    attachments:Array.isArray(old?.attachments)?old.attachments.slice():[],
     createdAt:old?.createdAt||new Date().toISOString(),
     updatedAt:new Date().toISOString(),
     ...(reviewStatus==="confirmed"?{reviewedAt:old?.reviewedAt||new Date().toISOString()}:{})
