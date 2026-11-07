@@ -997,6 +997,7 @@ async function api(req,res,pathname){
         "Cache-Control":"private, no-store"});
     }catch{return send(res,404,{error:"Файл недоступен в хранилище."},cors);}
   }
+  // Files are served only after the global Admin token check; never through a public static folder.
   if(pathname==="/api/dashboardx/declarations"&&req.method==="POST"){
     const body=await readBody(req);
     return enqueueWrite(async()=>{
@@ -1042,6 +1043,8 @@ async function api(req,res,pathname){
             seen.add(source);
             const data=declarationStore.normalizeRecord({...entry,reviewStatus:"needs_review",supplierId:null},db);
             declarationStore.storeFiles(DATA_DIR,data,entry.files||[],createdPaths);
+            if(!data.attachments.length||data.attachments[0].sha256!==source.slice(6))
+              throw Error("Идентификатор фотографии не совпал с вложением.");
             db.declarations.push(data);imported.push({id:data.id,importSourceId:source});
           }
           if(!imported.length)return send(res,200,{ok:true,revision:meta.revision,imported:[],skipped},cors);
