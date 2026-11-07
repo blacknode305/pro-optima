@@ -1093,6 +1093,10 @@ async function api(req,res,pathname){
         const id=String(body.id??"").trim();
         const index=db.declarations.findIndex(x=>String(x.id)===id);
         if(!id||index<0)return send(res,404,{error:"Документ не найден. Обновите список."},cors);
+        const target=db.declarations[index];
+        const referenced=db.declarations.some(x=>String(x.replacesId||"")===id);
+        if(target.archivedAt||target.reviewStatus==="confirmed"||(target.attachments||[]).length||referenced)
+          return send(res,409,{error:"Документ с архивной историей, подтверждением или фотографиями нельзя удалить. Используйте архив."},cors);
         db.declarations.splice(index,1);
         const nextMeta=commitDb(db,current,meta);
         // Keep private source files until archive retention is handled separately.
