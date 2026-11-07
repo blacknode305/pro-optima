@@ -7,6 +7,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { URL } = require("url");
 const branchRegistry = require("./branchRegistry.js");
+const declarationStore = require("./declarationStore.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -644,7 +645,7 @@ function applySupplierUpdate(db,update){
 }
 
 const ALLOWED_TOP_LEVEL=new Set([
-  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","declarations","settings","dashboardx"
+  "version","suppliers","products","supplierCatalog","offers","history","stocks","transfers","dateRequests","settings","dashboardx"
 ]);
 
 async function api(req,res,pathname){
@@ -984,39 +985,87 @@ async function api(req,res,pathname){
       }
     });
   }
+  const declarationFileMatch=pathname.match(/^\/api\/dashboardx\/declarations\/attachments\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9-]{36})$/i);
+  if(declarationFileMatch&&req.method==="GET"){
+    const {db}=loadState();
+    const file=declarationStore.findFile(db,DATA_DIR,declarationFileMatch[1],declarationFileMatch[2]);
+    if(!file)return send(res,404,{error:"Файл не найден."},cors);
+    try{
+      const bytes=fs.readFileSync(file.path);
+      return send(res,200,bytes,{...cors,"Content-Type":file.attachment.mime,
+        "X-Content-Type-Options":"nosniff",
+        "Content-Disposition":file.attachment.mime==="application/pdf"?"attachment":"inline",
+        "Cache-Control":"private, no-store"});
+    }catch{return send(res,404,{error:"Файл недоступен в хранилище."},cors);}
+  }
+  // Files are served only after the global Admin token check; never through a public static folder.
   if(pathname==="/api/dashboardx/declarations"&&req.method==="POST"){
     const body=await readBody(req);
     return enqueueWrite(async()=>{
       const state=loadState(),db=state.db,meta=state.meta,current=clone(db);
       if(!Number.isSafeInteger(body?.baseRevision)||Number(body.baseRevision)!==Number(meta.revision))
-        return send(res,409,{error:"База изменилась. Обновите декларации и повторите действие.",revision:meta.revision},cors);
+        return send(res,409,{error:"База изменилась. Обновите документы и повторите действие.",revision:meta.revision},cors);
       const action=String(body.action||"");
       if(action==="save"){
-        let data;
-        try{data=validateDeclarationInput(body.declaration,db);}
-        catch(error){return send(res,400,{error:error.message},cors);}
-        const id=String(body.declaration?.id??"").trim();
-        const index=id?db.declarations.findIndex(x=>String(x.id)===id):-1;
-        if(id&&index===-1)return send(res,404,{error:"Декларация не найдена. Обновите список."},cors);
-        const duplicate=db.declarations.some((x,i)=>i!==index&&
-          String(x.supplierId)===data.supplierId&&normalize(x.productType)===normalize(data.productType)&&
-          x.startDate===data.startDate&&x.endDate===data.endDate);
-        if(duplicate)return send(res,409,{error:"Такая декларация с теми же сроками уже сохранена."},cors);
+        const requestedId=String(body.declaration?.id??"").trim();
+        const index=requestedId?db.declarations.findIndex(x=>String(x.id)===requestedId):-1;
+        if(requestedId&&index===-1)return send(res,404,{error:"Документ не найден. Обновите список."},cors);
         const old=index>=0?db.declarations[index]:null;
-        const entry={id:old?.id||uid("decl"),...data,createdAt:old?.createdAt||nowIso(),updatedAt:nowIso()};
-        if(index>=0)db.declarations[index]=entry;else db.declarations.push(entry);
-        const nextMeta=commitDb(db,current,meta);
-        return send(res,200,{ok:true,revision:nextMeta.revision,declaration:entry},cors);
+        let record;
+        try{record=declarationStore.normalizeRecord(body.declaration,db,old);}
+        catch(error){return send(res,400,{error:error.message},cors);}
+        const duplicate=db.declarations.some((x,i)=>i!==index&&
+          (record.importSourceId&&x.importSourceId===record.importSourceId||
+           record.documentNumber&&x.documentType===record.documentType&&
+             normalize(x.documentNumber)===normalize(record.documentNumber)));
+        if(duplicate)return send(res,409,{error:"Документ с таким номером или исходным файлом уже сохранён."},cors);
+        const createdPaths=[];
+        try{
+          declarationStore.storeFiles(DATA_DIR,record,body.files||[],createdPaths);
+          if(index>=0)db.declarations[index]=record;else db.declarations.push(record);
+          const nextMeta=commitDb(db,current,meta);
+          return send(res,200,{ok:true,revision:nextMeta.revision,declaration:record},cors);
+        }catch(error){
+          for(const file of createdPaths)try{fs.unlinkSync(file)}catch{}
+          return send(res,400,{error:"Не удалось сохранить документ: "+error.message},cors);
+        }
+      }
+      if(action==="import"){
+        const entries=body.records;
+        if(!Array.isArray(entries)||entries.length<1||entries.length>12)
+          return send(res,400,{error:"Выберите пакет из 1–12 документов."},cors);
+        const createdPaths=[],imported=[],skipped=[];
+        try{
+          const seen=new Set(db.declarations.map(x=>String(x.importSourceId||"")).filter(Boolean));
+          for(const entry of entries){
+            const source=String(entry?.importSourceId||"").trim();
+            if(!/^photo-[a-f0-9]{64}$/.test(source))throw Error("Неизвестный идентификатор исходного файла.");
+            if(seen.has(source)){skipped.push(source);continue;}
+            seen.add(source);
+            const data=declarationStore.normalizeRecord({...entry,reviewStatus:"needs_review",supplierId:null},db);
+            declarationStore.storeFiles(DATA_DIR,data,entry.files||[],createdPaths);
+            if(!data.attachments.length||data.attachments[0].sha256!==source.slice(6))
+              throw Error("Идентификатор фотографии не совпал с вложением.");
+            db.declarations.push(data);imported.push({id:data.id,importSourceId:source});
+          }
+          if(!imported.length)return send(res,200,{ok:true,revision:meta.revision,imported:[],skipped},cors);
+          const nextMeta=commitDb(db,current,meta);
+          return send(res,200,{ok:true,revision:nextMeta.revision,imported,skipped},cors);
+        }catch(error){
+          for(const file of createdPaths)try{fs.unlinkSync(file)}catch{}
+          return send(res,400,{error:"Не удалось импортировать документы: "+error.message},cors);
+        }
       }
       if(action==="delete"){
         const id=String(body.id??"").trim();
         const index=db.declarations.findIndex(x=>String(x.id)===id);
-        if(!id||index<0)return send(res,404,{error:"Декларация не найдена. Обновите список."},cors);
+        if(!id||index<0)return send(res,404,{error:"Документ не найден. Обновите список."},cors);
         db.declarations.splice(index,1);
         const nextMeta=commitDb(db,current,meta);
+        // Keep private source files until archive retention is handled separately.
         return send(res,200,{ok:true,revision:nextMeta.revision,id},cors);
       }
-      return send(res,400,{error:"Операция с декларацией не поддерживается."},cors);
+      return send(res,400,{error:"Операция с документом не поддерживается."},cors);
     });
   }
   if(pathname==="/api/admin/db"&&req.method==="GET"){
@@ -1030,6 +1079,7 @@ async function api(req,res,pathname){
         return send(res,409,{error:"Конфликт версии. Сначала загрузите свежую базу.",revision:meta.revision,updatedAt:meta.updatedAt},cors);
       }
       if(!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))return send(res,400,{error:"changes должен быть объектом."},cors);
+      if(Object.hasOwn(body.changes,"declarations"))return send(res,400,{error:"Изменения документов доступны только через специальный API."},cors);
       if(Array.isArray(body.changes.suppliers)){
         const remaining=new Set(body.changes.suppliers.map(x=>String(x?.id)));
         const removed=new Set(db.suppliers.filter(s=>!remaining.has(String(s.id))).map(s=>String(s.id)));
@@ -1047,7 +1097,8 @@ async function api(req,res,pathname){
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
     if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
-    if(incoming&&incoming.declarations===undefined)incoming.declarations=clone(loadState().db.declarations);
+    // Legacy imports must never replace the separately managed document archive.
+    if(incoming)incoming.declarations=clone(loadState().db.declarations);
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     const ids=new Set(incoming.suppliers.map(s=>String(s.id)));
     if(incoming.declarations.some(d=>!ids.has(String(d.supplierId))))
