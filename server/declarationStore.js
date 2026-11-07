@@ -30,6 +30,18 @@ function normalizeRecord(data,db,old=null){
   if(!supplierId&&reviewStatus==="confirmed")throw Error("Для подтверждения документа выберите поставщика.");
   const productType=limit(data.productType??old?.productType,180);
   if(productType.length<2)throw Error("Укажите тип продукции (от 2 символов).");
+  // The broad group from the document stays separate from individually enumerated goods.
+  const rawItems=data.productItems===undefined?(old?.productItems||[]):data.productItems;
+  if(!Array.isArray(rawItems)||rawItems.length>100)throw Error("Список конкретных позиций должен содержать не более 100 строк.");
+  const itemKeys=new Set(),productItems=[];
+  for(const value of rawItems){
+    if(typeof value!=="string"||value.trim().length>160)
+      throw Error("Каждая позиция должна быть строкой до 160 символов.");
+    const label=value.trim().replace(/\\s+/g," ");
+    const id=label.toLocaleLowerCase("ru");
+    if(!label||itemKeys.has(id))continue;
+    itemKeys.add(id);productItems.push(label);
+  }
   const startDate=limit(data.startDate??old?.startDate,10);
   const endDate=limit(data.endDate??old?.endDate,10);
   if(!dateValid(startDate)||!dateValid(endDate)||!endDate)throw Error("Укажите корректный срок действия.");
@@ -65,7 +77,7 @@ function normalizeRecord(data,db,old=null){
   const qrPresent=Boolean(data.qrPresent??old?.qrPresent);
   return {
     id:old?.id||crypto.randomUUID(),documentType,reviewStatus,
-    supplierId:supplierId||null,productType,startDate,endDate,...extra,
+    supplierId:supplierId||null,productType,productItems,startDate,endDate,...extra,
     qrPresent,importSourceId,replacesId,
     archivedAt:old?.archivedAt||null,
     archiveReason:old?.archiveReason||"",
