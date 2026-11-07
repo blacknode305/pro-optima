@@ -1056,6 +1056,39 @@ async function api(req,res,pathname){
           return send(res,400,{error:"Не удалось импортировать документы: "+error.message},cors);
         }
       }
+      if(["archive","restore","request_replacement","cancel_replacement"].includes(action)){
+        const id=String(body.id??"").trim();
+        const record=db.declarations.find(x=>String(x.id)===id);
+        if(!id||!record)return send(res,404,{error:"Документ не найден. Обновите список."},cors);
+        const archived=Boolean(record.archivedAt);
+        const timestamp=nowIso();
+        if(action==="archive"){
+          if(archived)return send(res,200,{ok:true,revision:meta.revision,declaration:record},cors);
+          const reason=String(body.reason??"").trim();
+          if(!["expired","replaced","other"].includes(reason))
+            return send(res,400,{error:"Выберите причину переноса в архив."},cors);
+          const note=String(body.note??"").trim();
+          if(note.length>300)return send(res,400,{error:"Примечание к архиву должно быть до 300 символов."},cors);
+          record.archivedAt=timestamp;
+          record.archiveReason=reason;
+          record.archiveNote=note;
+        }else if(action==="restore"){
+          if(!archived)return send(res,200,{ok:true,revision:meta.revision,declaration:record},cors);
+          record.archivedAt=null;record.archiveReason="";record.archiveNote="";
+        }else{
+          if(archived)return send(res,409,{error:"Архивный документ нельзя отправить на повторный запрос. Сначала верните его в рабочий список."},cors);
+          if(action==="request_replacement"){
+            if(record.replacementRequestedAt)return send(res,200,{ok:true,revision:meta.revision,declaration:record},cors);
+            record.replacementRequestedAt=timestamp;
+          }else{
+            if(!record.replacementRequestedAt)return send(res,200,{ok:true,revision:meta.revision,declaration:record},cors);
+            record.replacementRequestedAt=null;
+          }
+        }
+        record.updatedAt=timestamp;
+        const nextMeta=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:nextMeta.revision,declaration:record},cors);
+      }
       if(action==="delete"){
         const id=String(body.id??"").trim();
         const index=db.declarations.findIndex(x=>String(x.id)===id);
