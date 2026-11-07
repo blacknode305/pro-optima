@@ -37,7 +37,7 @@ function normalizeRecord(data,db,old=null){
   for(const value of rawItems){
     if(typeof value!=="string"||value.trim().length>160)
       throw Error("Каждая позиция должна быть строкой до 160 символов.");
-    const label=value.trim().replace(/\\s+/g," ");
+    const label=value.trim().replace(/\s+/g," ");
     const id=label.toLocaleLowerCase("ru");
     if(!label||itemKeys.has(id))continue;
     itemKeys.add(id);productItems.push(label);
