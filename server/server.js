@@ -1034,13 +1034,27 @@ async function api(req,res,pathname){
         const entries=body.records;
         if(!Array.isArray(entries)||entries.length<1||entries.length>12)
           return send(res,400,{error:"Выберите пакет из 1–12 документов."},cors);
-        const createdPaths=[],imported=[],skipped=[];
+        const createdPaths=[],imported=[],skipped=[],updated=[];
         try{
           const seen=new Set(db.declarations.map(x=>String(x.importSourceId||"")).filter(Boolean));
           for(const entry of entries){
             const source=String(entry?.importSourceId||"").trim();
             if(!/^photo-[a-f0-9]{64}$/.test(source))throw Error("Неизвестный идентификатор исходного файла.");
-            if(seen.has(source)){skipped.push(source);continue;}
+            if(seen.has(source)){
+              // Re-importing a newer review bundle can add missing item names to older
+              // unreviewed drafts, but never overwrite confirmed or edited positions.
+              const existing=db.declarations.find(x=>String(x.importSourceId||"")===source);
+              if(existing?.reviewStatus==="needs_review"&&
+                 !(existing.productItems||[]).length&&Array.isArray(entry.productItems)&&entry.productItems.length){
+                const next=declarationStore.normalizeRecord({productItems:entry.productItems,
+                  productType:existing.productType,documentType:existing.documentType,
+                  endDate:existing.endDate},db,existing);
+                existing.productItems=next.productItems;
+                existing.updatedAt=nowIso();
+                updated.push({id:existing.id,importSourceId:source});
+              }else skipped.push(source);
+              continue;
+            }
             seen.add(source);
             const data=declarationStore.normalizeRecord({...entry,reviewStatus:"needs_review",supplierId:null},db);
             declarationStore.storeFiles(DATA_DIR,data,entry.files||[],createdPaths);
@@ -1048,9 +1062,9 @@ async function api(req,res,pathname){
               throw Error("Идентификатор фотографии не совпал с вложением.");
             db.declarations.push(data);imported.push({id:data.id,importSourceId:source});
           }
-          if(!imported.length)return send(res,200,{ok:true,revision:meta.revision,imported:[],skipped},cors);
+          if(!imported.length&&!updated.length)return send(res,200,{ok:true,revision:meta.revision,imported:[],updated,skipped},cors);
           const nextMeta=commitDb(db,current,meta);
-          return send(res,200,{ok:true,revision:nextMeta.revision,imported,skipped},cors);
+          return send(res,200,{ok:true,revision:nextMeta.revision,imported,updated,skipped},cors);
         }catch(error){
           for(const file of createdPaths)try{fs.unlinkSync(file)}catch{}
           return send(res,400,{error:"Не удалось импортировать документы: "+error.message},cors);
