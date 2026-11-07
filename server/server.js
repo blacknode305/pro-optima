@@ -993,7 +993,8 @@ async function api(req,res,pathname){
     try{
       const bytes=fs.readFileSync(file.path);
       return send(res,200,bytes,{...cors,"Content-Type":file.attachment.mime,
-        "X-Content-Type-Options":"nosniff","Content-Disposition":"inline",
+        "X-Content-Type-Options":"nosniff",
+        "Content-Disposition":file.attachment.mime==="application/pdf"?"attachment":"inline",
         "Cache-Control":"private, no-store"});
     }catch{return send(res,404,{error:"Файл недоступен в хранилище."},cors);}
   }
