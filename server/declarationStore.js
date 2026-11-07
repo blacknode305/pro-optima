@@ -32,7 +32,7 @@ function normalizeRecord(data,db,old=null){
   if(productType.length<2)throw Error("Укажите тип продукции (от 2 символов).");
   // The broad group from the document stays separate from individually enumerated goods.
   const rawItems=data.productItems===undefined?(old?.productItems||[]):data.productItems;
-  if(!Array.isArray(rawItems)||rawItems.length>100)throw Error("Список конкретных позиций должен содержать не более 100 строк.");
+  if(!Array.isArray(rawItems)||rawItems.length>300)throw Error("Список конкретных позиций должен содержать не более 300 строк.");
   const itemKeys=new Set(),productItems=[];
   for(const value of rawItems){
     if(typeof value!=="string"||value.trim().length>160)
