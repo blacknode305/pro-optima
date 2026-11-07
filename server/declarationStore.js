@@ -4,7 +4,7 @@
 const fs=require("fs");
 const path=require("path");
 const crypto=require("crypto");
-const TYPE_NAMES=new Set(["eaeu","veterinary"]);
+const TYPE_NAMES=new Set(["eaeu","veterinary","certificate","specification"]);
 const REVIEW_NAMES=new Set(["needs_review","confirmed"]);
 const MIME_EXT={
   "image/jpeg":".jpg",
@@ -44,9 +44,11 @@ function normalizeRecord(data,db,old=null){
   }
   const startDate=limit(data.startDate??old?.startDate,10);
   const endDate=limit(data.endDate??old?.endDate,10);
-  if(!dateValid(startDate)||!dateValid(endDate)||!endDate)throw Error("Укажите корректный срок действия.");
+  if(!dateValid(startDate)||!dateValid(endDate)||(["eaeu","veterinary"].includes(documentType)&&!endDate))
+    throw Error("Укажите корректный срок действия.");
   if(startDate&&endDate<startDate)throw Error("Дата окончания раньше начала.");
-  if(reviewStatus==="confirmed"&&!startDate)throw Error("Укажите дату начала действия перед подтверждением.");
+  if(reviewStatus==="confirmed"&&["eaeu","veterinary"].includes(documentType)&&!startDate)
+    throw Error("Укажите дату начала действия перед подтверждением.");
   const fields={
     documentNumber:130,applicantName:190,manufacturerName:190,originCountry:90,
     productDescription:700,technicalRegulations:200,registrationDate:10,issueDate:10,
