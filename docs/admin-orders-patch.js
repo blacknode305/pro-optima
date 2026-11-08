@@ -25,7 +25,7 @@
       const title=String(x.product||x.name||"Товар").trim();
       const stock=String(x.stock??"").trim();
       const off=x.used===false||stock==="-";
-      const value=off?"— не используется":stock.replace(".",",")+(x.stockUnit||x.unit?" "+String(x.stockUnit||x.unit).trim():"");
+      const value=off?"не используется":stock.replace(".",",")+(x.stockUnit||x.unit?" "+String(x.stockUnit||x.unit).trim():"");
       lines.push((i+1)+". "+title+" — "+value);
     });
     return {text:lines.join("\n"),count:items.length};
