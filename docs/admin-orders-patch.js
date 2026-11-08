@@ -3,7 +3,7 @@
   const DEFAULT_UNITS=["шт","кг","г","л","мл","м","см","мм","м²","м³","т","уп","пач","б","бут","бан","кор","ящ","меш","рул","лист","пара","компл","набор"];
   const currentUnits=()=>typeof window.PRO_OPTIMA_GET_UNIT_PRESETS==="function"?window.PRO_OPTIMA_GET_UNIT_PRESETS():[...DEFAULT_UNITS];
   const unitOptions=v=>{v=String(v||"").trim();const a=[...currentUnits()];if(v&&!a.includes(v))a.unshift(v);if(!a.length)a.push(v||"");return a.map(x=>`<option value="${window.esc(x)}" ${x===v?"selected":""}>${window.esc(x)||"—"}</option>`).join("")};
-  const css=document.createElement("style");css.textContent=`.admin-order-edit-head,.admin-order-edit-row{display:grid;grid-template-columns:minmax(190px,1.6fr) 86px 72px 86px 72px 34px;gap:5px;align-items:center}.admin-order-edit-head{font-size:9px;text-transform:uppercase;color:#74838b;font-weight:700;padding:3px 0}.admin-order-edit-row{padding:5px 0;border-bottom:1px solid #e4e9ec}.admin-order-edit-row input,.admin-order-edit-row select{min-width:0}.admin-order-edit-row .ao-product{text-align:left}.po-copy-order{white-space:nowrap}@media(max-width:700px){.admin-order-edit-head,.admin-order-edit-row{grid-template-columns:minmax(115px,1.2fr) 58px 55px 58px 55px 30px;gap:3px}.admin-order-edit-row input,.admin-order-edit-row select{padding:6px 3px;font-size:11px}}`;document.head.appendChild(css);
+  const css=document.createElement("style");css.textContent=`.admin-order-edit-head,.admin-order-edit-row{display:grid;grid-template-columns:minmax(190px,1.6fr) 86px 72px 86px 72px 34px;gap:5px;align-items:center}.admin-order-edit-head{font-size:9px;text-transform:uppercase;color:#74838b;font-weight:700;padding:3px 0}.admin-order-edit-row{padding:5px 0;border-bottom:1px solid #e4e9ec}.admin-order-edit-row input,.admin-order-edit-row select{min-width:0}.admin-order-edit-row .ao-product{text-align:left}.po-copy-order,.po-copy-stocks{white-space:nowrap}@media(max-width:700px){.admin-order-edit-head,.admin-order-edit-row{grid-template-columns:minmax(115px,1.2fr) 58px 55px 58px 55px 30px;gap:3px}.admin-order-edit-row input,.admin-order-edit-row select{padding:6px 3px;font-size:11px}}`;document.head.appendChild(css);
   function q(v){if(String(v??"").trim()==="-")return"-";const n=Number(String(v??"").replace(",","."));return Number.isFinite(n)?n:0}
   function editRow(x,i){const key=x.productId?`id:${x.productId}`:`name:${window.normalize(x.product||"")}`;return `<div class="admin-order-edit-row" data-i="${i}" data-key="${window.esc(key)}"><input class="ao-product" value="${window.esc(x.product||"")}"><input class="ao-stock" inputmode="decimal" value="${window.esc(x.stock??0)}"><select class="ao-stock-unit">${unitOptions(x.stockUnit||x.unit||"")}</select><input class="ao-order" inputmode="decimal" value="${window.esc(x.expected??0)}"><select class="ao-order-unit">${unitOptions(x.unit||"")}</select><button class="small danger" onclick="this.closest('.admin-order-edit-row').remove()">×</button></div>`}
   window.editHistoryOrder=function(id){
@@ -14,11 +14,49 @@
   window.addAdminOrderEditRow=function(){const w=document.getElementById("historyEditRows");if(!w)return;const first=currentUnits()[0]||"";w.insertAdjacentHTML("beforeend",editRow({product:"",stock:0,stockUnit:first,expected:0,unit:first},w.children.length));if(typeof window.enhanceClearInputs==="function")window.enhanceClearInputs(w)};
   async function copyText(text){try{await navigator.clipboard.writeText(text);return true}catch{const t=document.createElement("textarea");t.value=text;document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand("copy")}catch{}t.remove();return ok}}
   window.copySupplierOrderText=async function(id){const r=window.historyById(id);if(!r)return;const ok=await copyText(window.supplierOrderMessage(r));if(typeof window.show==="function")window.show("historyMsg",ok?"Текст заявки скопирован для WhatsApp.":"Браузер не разрешил копирование.",ok?"ok":"err")};
+  function supplierStocksMessage(r){
+    const date=String(r.requestDate||"");
+    const formattedDate=/^\d{4}-\d{2}-\d{2}$/.test(date)?date.split("-").reverse().join("."):date;
+    const lines=["Остатки по заявке",["Производство: ",r.branch||"—"].join(""),["Поставщик: ",r.supplier||"—"].join(""),"Дата заявки: "+(formattedDate||"—"),""];
+    const items=(Array.isArray(r.items)?r.items:[]).filter(x=>x&&(
+      x.used===false||(x.stock!==null&&x.stock!==undefined&&String(x.stock).trim()!=="")
+    ));
+    items.forEach((x,i)=>{
+      const title=String(x.product||x.name||"Товар").trim();
+      const stock=String(x.stock??"").trim();
+      const off=x.used===false||stock==="-";
+      const value=off?"— не используется":stock.replace(".",",")+(x.stockUnit||x.unit?" "+String(x.stockUnit||x.unit).trim():"");
+      lines.push((i+1)+". "+title+" — "+value);
+    });
+    return {text:lines.join("\n"),count:items.length};
+  }
+  window.copySupplierStocksText=async function(id){
+    const r=window.historyById(id);if(!r)return;
+    const result=supplierStocksMessage(r);
+    if(!result.count){
+      if(typeof window.show==="function")window.show("historyMsg","В этой заявке нет заполненных остатков.","err");
+      return;
+    }
+    const ok=await copyText(result.text);
+    if(typeof window.show==="function")window.show("historyMsg",
+      ok?"Скопированы остатки из заявки: "+result.count+" позиций.":"Браузер не разрешил копирование.",ok?"ok":"err");
+  };
   function injectCopyButtons(){
     document.querySelectorAll('button[onclick^="editHistoryOrder("]').forEach(btn=>{
       const attr=btn.getAttribute("onclick")||"";const m=attr.match(/editHistoryOrder\(['\"]([^'\"]+)['\"]\)/);if(!m)return;
-      if(btn.parentElement?.querySelector(`.po-copy-order[data-order-id="${CSS.escape(m[1])}"]`))return;
-      const copy=document.createElement("button");copy.className="small secondary po-copy-order";copy.dataset.orderId=m[1];copy.textContent="Копировать заявку";copy.onclick=()=>window.copySupplierOrderText(m[1]);btn.insertAdjacentElement("afterend",copy);
+      const parent=btn.parentElement;if(!parent)return;
+      const existing=[...parent.querySelectorAll(".po-copy-order,.po-copy-stocks")];
+      let copy=existing.find(x=>x.classList.contains("po-copy-order")&&x.dataset.orderId===m[1]);
+      if(!copy){
+        copy=document.createElement("button");copy.type="button";copy.className="small secondary po-copy-order";
+        copy.dataset.orderId=m[1];copy.textContent="Копировать заявку";
+        copy.onclick=()=>window.copySupplierOrderText(m[1]);btn.insertAdjacentElement("afterend",copy);
+      }
+      if(!existing.some(x=>x.classList.contains("po-copy-stocks")&&x.dataset.orderId===m[1])){
+        const stocks=document.createElement("button");stocks.type="button";stocks.className="small secondary po-copy-stocks";
+        stocks.dataset.orderId=m[1];stocks.textContent="Копировать остатки";
+        stocks.onclick=()=>window.copySupplierStocksText(m[1]);copy.insertAdjacentElement("afterend",stocks);
+      }
     });
   }
   const originalRender=window.renderHistory;
