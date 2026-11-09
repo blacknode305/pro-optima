@@ -39,12 +39,10 @@ function blockLegacySupplierUpdate(req,res,url){
  */
 const CLIENT_ASSETS=Object.freeze({
   "/form.html":"form.html",
-  "/operator.html":"operator.html",
   "/config.js":"config.js",
   "/pro-optima-ui.css":"pro-optima-ui.css",
   "/form-date-native.js":"form-date-native.js",
   "/form-stock-carryover.js":"form-stock-carryover.js",
-  "/operator-dispatcher-auth.js":"operator-dispatcher-auth.js",
   "/unit-presets.js":"unit-presets.js",
   "/branch-display.js":"branch-display.js",
   "/realtime.js":"realtime.js",

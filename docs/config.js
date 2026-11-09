@@ -68,7 +68,7 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       if(row&&!row.querySelector(".po-role-switch")){
         const nav=document.createElement("div");
         nav.className="po-role-switch";
-        nav.innerHTML='<a href="operator.html">Оператор</a><a href="form.html">Форма</a>';
+        nav.innerHTML='<a href="form.html">Форма производства</a>';
         row.appendChild(nav);
       }
     }
@@ -79,7 +79,7 @@ window.PRO_OPTIMA_CONFIG = Object.freeze({
       appendScript("admin-orders-patch.js?v=20261015-4");
       appendScript("admin-unit-settings.js?v=20261015-1");
       appendScript("admin-history-delete-fix.js?v=20261015-1");
-      appendScript("admin-dispatcher-settings.js?v=20261015-1");
+      /* Dispatcher UI disabled until explicitly reactivated. */
       appendScript("admin-stock-ordered.js?v=20261015-2");
       appendScript("admin-order-card-history.js?v=20261015-2");
       appendScript("admin-update-safety.js?v=20261015-1");

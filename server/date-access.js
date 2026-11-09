@@ -112,7 +112,7 @@ async function sessionBootstrap(req){
 }
 async function adminDb(){
   if(!ADMIN_TOKEN)throw Object.assign(new Error("SOPTIMA_ADMIN_TOKEN не настроен."),{status:500});
-  return internal("/api/admin/db",{headers:{Authorization:`Bearer ${ADMIN_TOKEN}`}});
+  return internal("/api/admin/db",{headers:{Authorization:`Bearer ${ADMIN_TOKEN}`,"X-Optima-Write-Password":WRITE_PASSWORD}});
 }
 async function patchAdminDb(baseRevision,changes){
   return internal("/api/admin/db",{method:"PATCH",headers:{Authorization:`Bearer ${ADMIN_TOKEN}`,"X-Optima-Write-Password":WRITE_PASSWORD},body:JSON.stringify({baseRevision,changes})});
