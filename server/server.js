@@ -9,12 +9,14 @@ const { URL } = require("url");
 const branchRegistry = require("./branchRegistry.js");
 const declarationStore = require("./declarationStore.js");
 const optimaV1 = require("./optimaV1.js");
+const dashboardxStore = require("./dashboardxStore.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
 const SEED_DIR = path.join(ROOT, "data");
 const BACKUP_DIR = path.join(DATA_DIR, "backups");
-const DB_FILE = path.join(DATA_DIR, "database.json");
+const LEGACY_DB_FILE = path.join(DATA_DIR, "database.json");
+const DB_FILE = path.join(DATA_DIR, "dashboardx.json");
 const META_FILE = path.join(DATA_DIR, "meta.json");
 const ACCESS_FILE = path.join(DATA_DIR, "access.json");
 const SEED_DB_FILE = path.join(SEED_DIR, "database.seed.json");
@@ -87,10 +89,10 @@ function readJson(file, fallback){
 function ensurePersistentFiles(){
   fs.mkdirSync(DATA_DIR,{recursive:true});
   fs.mkdirSync(BACKUP_DIR,{recursive:true});
-  if(!fs.existsSync(DB_FILE)){
+  if(!fs.existsSync(DB_FILE)&&!fs.existsSync(LEGACY_DB_FILE)){
     if(!fs.existsSync(SEED_DB_FILE)) throw new Error("Missing data/database.seed.json");
-    fs.copyFileSync(SEED_DB_FILE,DB_FILE);
-    console.log("[SOPTIMA] Created database.json from seed.");
+    fs.copyFileSync(SEED_DB_FILE,LEGACY_DB_FILE);
+    console.log("[SOPTIMA] Created initial legacy database from seed.");
   }
   if(!fs.existsSync(META_FILE)){
     if(fs.existsSync(SEED_META_FILE)) fs.copyFileSync(SEED_META_FILE,META_FILE);
@@ -99,13 +101,30 @@ function ensurePersistentFiles(){
   if(!fs.existsSync(ACCESS_FILE)){
     writeJsonAtomic(ACCESS_FILE,{version:1,branches:{},updatedAt:nowIso()});
   }
+  if(!fs.existsSync(DB_FILE)){
+    // start.js verifies the full pre-migration volume snapshot before reaching
+    // this code. The old database.json remains an untouched rollback source.
+    const legacy=validateDb(JSON.parse(fs.readFileSync(LEGACY_DB_FILE,"utf8")));
+    const canonical=dashboardxStore.toCanonical(legacy);
+    const verified=dashboardxStore.compareRoundTrip(legacy,canonical);
+    writeJsonAtomic(DB_FILE,canonical);
+    const reloaded=dashboardxStore.fromCanonical(JSON.parse(fs.readFileSync(DB_FILE,"utf8")));
+    dashboardxStore.compareRoundTrip(reloaded,canonical);
+    console.log("[SOPTIMA] dashboardx.optima migrated from legacy storage:",JSON.stringify(verified));
+  }else{
+    // Reject invalid/corrupted canonical data. Never silently fall back to
+    // stale database.json, or production writes could be lost.
+    validateDb(dashboardxStore.fromCanonical(JSON.parse(fs.readFileSync(DB_FILE,"utf8"))));
+    console.log("[SOPTIMA] dashboardx.optima canonical storage verified.");
+  }
 }
 function validateDb(db){
   if(!db || typeof db!=="object" || Array.isArray(db)) throw new Error("Database must be a JSON object.");
   for(const key of ["suppliers","products"]){
     if(!Array.isArray(db[key])) throw new Error(`${key} must be an array.`);
   }
-  for(const key of ["supplierCatalog","offers","history","stocks","transfers","dateRequests","declarations"]){
+  for(const key of ["supplierCatalog","offers","history","stocks","transfers","dateRequests","declarations",
+    ...dashboardxStore.NEW_COLLECTIONS]){
     if(db[key]!==undefined && !Array.isArray(db[key])) throw new Error(`${key} must be an array.`);
   }
   if(db.settings!==undefined && (!db.settings || typeof db.settings!=="object" || Array.isArray(db.settings))){
@@ -119,6 +138,7 @@ function validateDb(db){
   if(!Array.isArray(db.transfers)) db.transfers=[];
   if(!Array.isArray(db.dateRequests)) db.dateRequests=[];
   if(!Array.isArray(db.declarations)) db.declarations=[];
+  for(const key of dashboardxStore.NEW_COLLECTIONS)if(!Array.isArray(db[key]))db[key]=[];
   if(!db.settings || typeof db.settings!=="object") db.settings={};
   if(db.dashboardx===undefined)db.dashboardx={schemaVersion:1,media:{radioStations:[]}};
   if(!db.dashboardx||typeof db.dashboardx!=="object"||Array.isArray(db.dashboardx))throw new Error("dashboardx must be an object");
@@ -130,11 +150,10 @@ function validateDb(db){
   return db;
 }
 function loadState(){
-  const db = validateDb(readJson(DB_FILE,{
-    version:23,suppliers:[],products:[],supplierCatalog:[],offers:[],history:[],stocks:[],
-    transfers:[],dateRequests:[],declarations:[],settings:{}
-  }));
-  const meta = readJson(META_FILE,{revision:1,updatedAt:nowIso()});
+  // Always read the single canonical dashboardx.json on the Railway volume.
+  const canonical=JSON.parse(fs.readFileSync(DB_FILE,"utf8"));
+  const db=validateDb(dashboardxStore.fromCanonical(canonical));
+  const meta=readJson(META_FILE,{revision:1,updatedAt:nowIso()});
   return {db,meta};
 }
 function loadAccess(){
@@ -144,7 +163,7 @@ function loadAccess(){
 }
 function backupCurrent(db, revision){
   const stamp = nowIso().replace(/[:.]/g,"-");
-  fs.writeFileSync(path.join(BACKUP_DIR,`${stamp}_rev-${revision}.json`),JSON.stringify(db,null,2),"utf8");
+  fs.writeFileSync(path.join(BACKUP_DIR,`${stamp}_rev-${revision}.dashboardx.json`),JSON.stringify(dashboardxStore.toCanonical(db),null,2),"utf8");
   const files=fs.readdirSync(BACKUP_DIR).filter(x=>x.endsWith(".json"))
     .map(name=>({name,time:fs.statSync(path.join(BACKUP_DIR,name)).mtimeMs}))
     .sort((a,b)=>b.time-a.time);
@@ -160,7 +179,7 @@ function commitDb(next, current, meta){
   validateDb(next);
   backupCurrent(current,meta.revision);
   const nextMeta={revision:Number(meta.revision||0)+1,updatedAt:nowIso()};
-  writeJsonAtomic(DB_FILE,next);
+  writeJsonAtomic(DB_FILE,dashboardxStore.toCanonical(next));
   writeJsonAtomic(META_FILE,nextMeta);
   return nextMeta;
 }
@@ -673,9 +692,36 @@ async function api(req,res,pathname){
   // Versioned Optima namespace: read-only, derived from the existing Railway DB.
   if(pathname.startsWith("/api/dashboardx/optima/v1/")){
     if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен."},cors);
-    if(req.method!=="GET")return send(res,405,{error:"Read-only API."},cors);
+    if(pathname==="/api/dashboardx/optima/v1/state"&&req.method==="PATCH"){
+      if(!adminWriteOk(req))return send(res,403,{error:"Нужны Admin Token и пароль администратора."},cors);
+      const body=await readBody(req);
+      return enqueueWrite(async()=>{
+        const state=loadState(),db=state.db,meta=state.meta,current=clone(db);
+        if(!Number.isSafeInteger(body.baseRevision)||body.baseRevision!==Number(meta.revision))
+          return send(res,409,{error:"Версия базы изменилась. Повторите после обновления.",revision:meta.revision},cors);
+        if(!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))
+          return send(res,400,{error:"changes должен быть объектом."},cors);
+        const keys=Object.keys(body.changes);
+        if(!keys.length||keys.some(key=>!ALLOWED_TOP_LEVEL.has(key)||["dashboardx","declarations","version"].includes(key)))
+          return send(res,400,{error:"Недопустимое поле. Документы и история соответствий редактируются через отдельные API."},cors);
+        if(Array.isArray(body.changes.suppliers)){
+          const remaining=new Set(body.changes.suppliers.map(x=>String(x?.id)));
+          const removed=new Set(db.suppliers.filter(x=>!remaining.has(String(x.id))).map(x=>String(x.id)));
+          if(db.declarations.some(x=>removed.has(String(x.supplierId))))
+            return send(res,409,{error:"Нельзя удалить поставщика, связанного с документом."},cors);
+        }
+        for(const key of keys)db[key]=body.changes[key];
+        try{validateDb(db)}catch(error){return send(res,400,{error:error.message},cors)}
+        const next=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:next.revision,updatedAt:next.updatedAt},cors);
+      });
+    }
+    if(req.method!=="GET")return send(res,405,{error:"Unsupported Optima v1 method."},cors);
     const {db,meta}=loadState();
     const headers={...cors,"Cache-Control":"private, no-store"};
+    if(pathname==="/api/dashboardx/optima/v1/state")
+      return send(res,200,{ok:true,schemaVersion:1,source:"dashboardx.optima",
+        revision:meta.revision,updatedAt:meta.updatedAt,data:dashboardxStore.optimaFromLegacy(db)},headers);
     if(pathname==="/api/dashboardx/optima/v1/overview")
       return send(res,200,optimaV1.overview(db,meta),headers);
     const requestUrl=new URL(req.url,"http://localhost");
@@ -1016,13 +1062,13 @@ async function api(req,res,pathname){
         backupCurrent(current,meta.revision);
         fs.writeFileSync(path.join(BACKUP_DIR,stamp+"_access.json"),JSON.stringify(originalAccess,null,2),"utf8");
         if(accessChanged)writeJsonAtomic(ACCESS_FILE,plan.access);
-        writeJsonAtomic(DB_FILE,plan.db);
+        writeJsonAtomic(DB_FILE,dashboardxStore.toCanonical(plan.db));
         const nextMeta={revision:Number(meta.revision||0)+1,updatedAt:nowIso()};
         writeJsonAtomic(META_FILE,nextMeta);
         return send(res,200,{ok:true,revision:nextMeta.revision,summary:plan.report.changes},cors);
       }catch(e){
         // Best-effort rollback if either store failed to commit; backups remain available.
-        try{writeJsonAtomic(DB_FILE,current);writeJsonAtomic(ACCESS_FILE,originalAccess);writeJsonAtomic(META_FILE,originalMeta);}catch(rollbackError){
+        try{writeJsonAtomic(DB_FILE,dashboardxStore.toCanonical(current));writeJsonAtomic(ACCESS_FILE,originalAccess);writeJsonAtomic(META_FILE,originalMeta);}catch(rollbackError){
           console.error("[SOPTIMA] Branch migration rollback failed:",rollbackError);
         }
         console.error("[SOPTIMA] Branch migration failed:",e);
@@ -1193,8 +1239,13 @@ async function api(req,res,pathname){
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
     if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
-    // Legacy imports must never replace the separately managed document archive.
-    if(incoming)incoming.declarations=clone(loadState().db.declarations);
+    // Legacy imports must never replace separately managed documents or
+    // verified relations/price audit/receipts added under dashboardx.optima.
+    if(incoming){
+      const protectedState=loadState().db;
+      incoming.declarations=clone(protectedState.declarations);
+      for(const key of dashboardxStore.NEW_COLLECTIONS)incoming[key]=clone(protectedState[key]);
+    }
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     const ids=new Set(incoming.suppliers.map(s=>String(s.id)));
     if(incoming.declarations.some(d=>!ids.has(String(d.supplierId))))
