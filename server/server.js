@@ -695,6 +695,7 @@ async function api(req,res,pathname){
   // Versioned Optima namespace: read-only, derived from the existing Railway DB.
   if(pathname.startsWith("/api/dashboardx/optima/v1/")){
     if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен."},cors);
+    if(!adminWriteOk(req))return send(res,403,{error:"Для доступа к данным Оптима нужен пароль администратора."},cors);
     if(pathname==="/api/dashboardx/optima/v1/state"&&req.method==="PATCH"){
       if(!adminWriteOk(req))return send(res,403,{error:"Нужны Admin Token и пароль администратора."},cors);
       const body=await readBody(req);
@@ -894,6 +895,7 @@ async function api(req,res,pathname){
   }
   if(pathname==="/api/db"&&req.method==="GET"){
     if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен для чтения базы."},cors);
+    if(!adminWriteOk(req))return send(res,403,{error:"Для чтения базы также нужен пароль администратора."},cors);
     const {db,meta}=loadState();
     // DashboardX translations and personal vocabulary are private to the authenticated API.
     const publicDb={...db,dashboardx:{...db.dashboardx}};
@@ -1052,6 +1054,7 @@ async function api(req,res,pathname){
   }
 
   if(!adminOk(req))return send(res,401,{error:"Неверный или отсутствующий Admin token."},cors);
+  if(!adminWriteOk(req))return send(res,403,{error:"Для защищённого доступа нужен пароль администратора."},cors);
   // Every privileged PRO OPTIMA mutation must be validated on the server:
   // token alone grants read access, never write access.
   if(!["GET","HEAD","OPTIONS"].includes(req.method) && !adminWriteOk(req))
