@@ -10,6 +10,7 @@ const branchRegistry = require("./branchRegistry.js");
 const declarationStore = require("./declarationStore.js");
 const optimaV1 = require("./optimaV1.js");
 const dashboardxStore = require("./dashboardxStore.js");
+const optimaRelationships = require("./optimaRelationships.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -177,6 +178,8 @@ function enqueueWrite(fn){
 }
 function commitDb(next, current, meta){
   validateDb(next);
+  // Append audit events before persisting. Never erase previous price records.
+  optimaRelationships.appendPriceHistory(next,current,Number(meta.revision||0)+1);
   backupCurrent(current,meta.revision);
   const nextMeta={revision:Number(meta.revision||0)+1,updatedAt:nowIso()};
   writeJsonAtomic(DB_FILE,dashboardxStore.toCanonical(next));
@@ -716,12 +719,39 @@ async function api(req,res,pathname){
         return send(res,200,{ok:true,revision:next.revision,updatedAt:next.updatedAt},cors);
       });
     }
+    if(pathname==="/api/dashboardx/optima/v1/relations"&&req.method==="POST"){
+      if(!adminWriteOk(req))return send(res,403,{error:"Нужны Admin Token и пароль администратора."},cors);
+      const body=await readBody(req);
+      return enqueueWrite(async()=>{
+        const state=loadState(),db=state.db,meta=state.meta,current=clone(db);
+        if(!Number.isSafeInteger(body.baseRevision)||body.baseRevision!==Number(meta.revision))
+          return send(res,409,{error:"Данные изменились. Обновите запись и повторите.",revision:meta.revision},cors);
+        let record;
+        try{
+          record=optimaRelationships.applyRelation(db,String(body.entity||""),String(body.action||"upsert"),body.record,body.recordId);
+        }catch(error){return send(res,400,{error:error.message},cors)}
+        const next=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:next.revision,record},cors);
+      });
+    }
     if(req.method!=="GET")return send(res,405,{error:"Unsupported Optima v1 method."},cors);
     const {db,meta}=loadState();
     const headers={...cors,"Cache-Control":"private, no-store"};
     if(pathname==="/api/dashboardx/optima/v1/state")
       return send(res,200,{ok:true,schemaVersion:1,source:"dashboardx.optima",
         revision:meta.revision,updatedAt:meta.updatedAt,data:dashboardxStore.optimaFromLegacy(db)},headers);
+    if(pathname==="/api/dashboardx/optima/v1/relations"){
+      const url=new URL(req.url,"http://localhost");
+      const type=String(url.searchParams.get("entity")||"");
+      if(!optimaRelationships.RELATION_TYPES.has(type)&&type!=="priceHistory")
+        return send(res,400,{error:"Неизвестный тип связей."},headers);
+      const catalogItemId=url.searchParams.get("catalogItemId");
+      const documentId=url.searchParams.get("documentId");
+      const rowsToReturn=ensureArray(db[type]).filter(x=>
+        (!catalogItemId||String(x.catalogItemId||"")===catalogItemId)&&
+        (!documentId||String(x.documentId||"")===documentId));
+      return send(res,200,{ok:true,revision:meta.revision,entity:type,records:rowsToReturn},headers);
+    }
     if(pathname==="/api/dashboardx/optima/v1/overview")
       return send(res,200,optimaV1.overview(db,meta),headers);
     const requestUrl=new URL(req.url,"http://localhost");
