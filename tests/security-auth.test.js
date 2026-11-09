@@ -89,6 +89,11 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal((await mutation({})).status, 403, 'admin token alone cannot update the DB');
     assert.equal((await mutation({ 'X-Optima-Write-Password': 'bad' })).status, 403);
     assert.equal((await mutation({ 'X-Optima-Write-Password': password })).status, 200);
+    const missingRevision = await req('/api/admin/db', {
+      method:'PATCH',headers:authorized,
+      body:JSON.stringify({baseRevision:null,changes:{settings:{unsafe:true}}})
+    });
+    assert.equal(missingRevision.status,409,'legacy PATCH cannot overwrite with null revision');
     const stateBefore = await (await req('/api/dashboardx/optima/v1/state', { headers: authorized })).json();
     const statePatch = additional => req('/api/dashboardx/optima/v1/state', {
       method:'PATCH', headers: { ...headers, ...additional },
