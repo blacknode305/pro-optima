@@ -37,6 +37,7 @@ test('shared database is private and branch PIN writes require admin token plus 
   });
   const req = (url, opts = {}) => fetch(base + url, opts);
   const headers = { Authorization: 'Bearer ' + adminToken, 'Content-Type': 'application/json' };
+  const authorized = { ...headers, 'X-Optima-Write-Password': password };
   try {
     let ready = false;
     for (let i = 0; i < 80; i++) {
@@ -53,20 +54,22 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal(readFileSync(join(dir, 'database.json'), 'utf8').includes('"dashboardx"'), false,
       'original legacy database is unchanged during migration');
     assert.equal((await req('/api/db')).status, 401, 'no public DB read');
-    assert.equal((await req('/api/db', { headers })).status, 200, 'admin token grants read');
+    assert.equal((await req('/api/db', { headers })).status, 403, 'token alone cannot read');
+    assert.equal((await req('/api/db', { headers: authorized })).status, 200, 'both factors grant read');
     assert.equal((await req('/api/dashboardx/optima/v1/overview')).status, 401, 'Optima namespace is private');
-    const overview = await (await req('/api/dashboardx/optima/v1/overview', { headers })).json();
+    assert.equal((await req('/api/dashboardx/optima/v1/overview', { headers })).status, 403);
+    const overview = await (await req('/api/dashboardx/optima/v1/overview', { headers: authorized })).json();
     assert.equal(overview.schemaVersion, 1);
     assert.equal(overview.isPhysicalMigrationComplete, true);
     assert.equal(overview.source, 'dashboardx.optima');
-    const globalState = await (await req('/api/dashboardx/optima/v1/state', { headers })).json();
+    const globalState = await (await req('/api/dashboardx/optima/v1/state', { headers: authorized })).json();
     assert.equal(globalState.source, 'dashboardx.optima');
     assert.ok(globalState.data.priceHistory);
     assert.equal('learning' in globalState.data, false);
-    assert.equal((await req('/api/dashboardx/optima/v1/products', { headers })).status, 200);
-    assert.equal((await req('/api/dashboardx/optima/v1/passport?productId=not-found', { headers })).status, 404);
+    assert.equal((await req('/api/dashboardx/optima/v1/products', { headers: authorized })).status, 200);
+    assert.equal((await req('/api/dashboardx/optima/v1/passport?productId=not-found', { headers: authorized })).status, 404);
     assert.equal((await req('/api/admin/access')).status, 401);
-    const access = await (await req('/api/admin/access', { headers })).json();
+    const access = await (await req('/api/admin/access', { headers: authorized })).json();
     assert.equal(access.passwordRequiredForPins, true);
     const put = additional => req('/api/admin/access', {
       method: 'PUT', headers: { ...headers, ...additional },
@@ -75,10 +78,10 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal((await put({})).status, 403, 'cannot edit PIN with token only');
     assert.equal((await put({ 'X-Optima-Write-Password': 'incorrect' })).status, 403);
     assert.equal((await put({ 'X-Optima-Write-Password': password })).status, 200);
-    const after = await (await req('/api/admin/access', { headers })).json();
+    const after = await (await req('/api/admin/access', { headers: authorized })).json();
     assert.equal(after.branches[0].configured, true);
     assert.equal(JSON.stringify(after).includes('9142'), false, 'never expose PIN value');
-    const base = await (await req('/api/admin/db', { headers })).json();
+    const base = await (await req('/api/admin/db', { headers: authorized })).json();
     const mutation = added => req('/api/admin/db', {
       method: 'PATCH', headers: { ...headers, ...added },
       body: JSON.stringify({ baseRevision: base.revision, changes: { settings: { testWriteGuard: true } } })
@@ -86,7 +89,7 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal((await mutation({})).status, 403, 'admin token alone cannot update the DB');
     assert.equal((await mutation({ 'X-Optima-Write-Password': 'bad' })).status, 403);
     assert.equal((await mutation({ 'X-Optima-Write-Password': password })).status, 200);
-    const stateBefore = await (await req('/api/dashboardx/optima/v1/state', { headers })).json();
+    const stateBefore = await (await req('/api/dashboardx/optima/v1/state', { headers: authorized })).json();
     const statePatch = additional => req('/api/dashboardx/optima/v1/state', {
       method:'PATCH', headers: { ...headers, ...additional },
       body: JSON.stringify({ baseRevision: stateBefore.revision, changes: {
@@ -100,22 +103,14 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal(stored.dashboardx.optima.settings.testWriteGuard, true);
     assert.equal('products' in stored, false);
     assert.ok(readFileSync(join(dir, 'database.json'), 'utf8').includes('"products":[]'));
-    assert.equal((await req('/api/admin/db', { headers })).status, 200);
+    assert.equal((await req('/api/admin/db', { headers: authorized })).status, 200);
     assert.equal((await req('/api/admin/dispatcher-access', {
-      method: 'PUT', headers, body: JSON.stringify({ pin: '5824' })
-    })).status, 403, 'dispatcher PIN is protected');
-    assert.equal((await req('/api/admin/dispatcher-access', {
-      method: 'PUT', headers: { ...headers, 'X-Optima-Write-Password': password },
-      body: JSON.stringify({ pin: '5824' })
-    })).status, 200);
-    const dispatcherLogin = await (await req('/api/dispatcher/login', {
+      method: 'PUT', headers: authorized, body: JSON.stringify({ pin: '5824' })
+    })).status, 410, 'dispatcher UI and its PIN management are disabled');
+    assert.equal((await req('/api/dispatcher/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin: '5824' })
-    })).json();
-    assert.ok(dispatcherLogin.token, 'dispatcher still authenticates with own PIN');
-    assert.equal((await req('/api/dispatcher/bootstrap', {
-      headers: { Authorization: 'Bearer ' + dispatcherLogin.token }
-    })).status, 200);
+    })).status, 410);
     const operator = await (await req('/api/operator/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch: 'Горняк', pin: '9142' })
