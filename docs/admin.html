@@ -3249,14 +3249,15 @@ async function remoteFetch(path,opts={}){
   const headers={"Content-Type":"application/json",...(opts.headers||{})};
   if(opts.admin!==false&&adminToken())headers.Authorization="Bearer "+adminToken();
   const isMutation=!["GET","HEAD","OPTIONS"].includes(String(opts.method||"GET").toUpperCase());
-  if(isMutation){
+  // Admin Token and password are required for BOTH reading and changing Optima.
+  if(true){
     if(!adminAccessWritePassword)
       adminAccessWritePassword=prompt("Введите пароль администратора Оптима для сохранения изменений","")||"";
     if(!adminAccessWritePassword)throw new Error("Пароль администратора не введён.");
     headers["X-Optima-Write-Password"]=adminAccessWritePassword;
   }
   const r=await fetch(API_BASE+path,{...opts,headers});
-  if(isMutation&&r.status===403)adminAccessWritePassword="";
+  if(r.status===403)adminAccessWritePassword="";
   let data={};try{data=await r.json()}catch{}
   if(!r.ok)throw Object.assign(new Error(data.error||`HTTP ${r.status}`),{status:r.status,data});
   return data;
@@ -3476,8 +3477,10 @@ async function clearAllHistoryFromAdmin(){
 }
 async function exportServerDatabase(){
   if(!adminToken()){setAdminTokenPrompt();if(!adminToken())return}
+  if(!adminAccessWritePassword)adminAccessWritePassword=prompt("Введите пароль администратора для экспорта","")||"";
+  if(!adminAccessWritePassword)return;
   try{
-    const r=await fetch(API_BASE+"/api/admin/export",{headers:{Authorization:"Bearer "+adminToken()}});
+    const r=await fetch(API_BASE+"/api/admin/export",{headers:{Authorization:"Bearer "+adminToken(),"X-Optima-Write-Password":adminAccessWritePassword}});
     if(!r.ok)throw new Error("Ошибка экспорта");
     const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`PRO_OPTIMA_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
   }catch(e){show("settingsMsg",e.message,"err")}
