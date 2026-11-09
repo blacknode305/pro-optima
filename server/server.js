@@ -692,9 +692,36 @@ async function api(req,res,pathname){
   // Versioned Optima namespace: read-only, derived from the existing Railway DB.
   if(pathname.startsWith("/api/dashboardx/optima/v1/")){
     if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен."},cors);
-    if(req.method!=="GET")return send(res,405,{error:"Read-only API."},cors);
+    if(pathname==="/api/dashboardx/optima/v1/state"&&req.method==="PATCH"){
+      if(!adminWriteOk(req))return send(res,403,{error:"Нужны Admin Token и пароль администратора."},cors);
+      const body=await readBody(req);
+      return enqueueWrite(async()=>{
+        const state=loadState(),db=state.db,meta=state.meta,current=clone(db);
+        if(!Number.isSafeInteger(body.baseRevision)||body.baseRevision!==Number(meta.revision))
+          return send(res,409,{error:"Версия базы изменилась. Повторите после обновления.",revision:meta.revision},cors);
+        if(!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))
+          return send(res,400,{error:"changes должен быть объектом."},cors);
+        const keys=Object.keys(body.changes);
+        if(!keys.length||keys.some(key=>!ALLOWED_TOP_LEVEL.has(key)||["dashboardx","declarations","version"].includes(key)))
+          return send(res,400,{error:"Недопустимое поле. Документы и история соответствий редактируются через отдельные API."},cors);
+        if(Array.isArray(body.changes.suppliers)){
+          const remaining=new Set(body.changes.suppliers.map(x=>String(x?.id)));
+          const removed=new Set(db.suppliers.filter(x=>!remaining.has(String(x.id))).map(x=>String(x.id)));
+          if(db.declarations.some(x=>removed.has(String(x.supplierId))))
+            return send(res,409,{error:"Нельзя удалить поставщика, связанного с документом."},cors);
+        }
+        for(const key of keys)db[key]=body.changes[key];
+        try{validateDb(db)}catch(error){return send(res,400,{error:error.message},cors)}
+        const next=commitDb(db,current,meta);
+        return send(res,200,{ok:true,revision:next.revision,updatedAt:next.updatedAt},cors);
+      });
+    }
+    if(req.method!=="GET")return send(res,405,{error:"Unsupported Optima v1 method."},cors);
     const {db,meta}=loadState();
     const headers={...cors,"Cache-Control":"private, no-store"};
+    if(pathname==="/api/dashboardx/optima/v1/state")
+      return send(res,200,{ok:true,schemaVersion:1,source:"dashboardx.optima",
+        revision:meta.revision,updatedAt:meta.updatedAt,data:dashboardxStore.optimaFromLegacy(db)},headers);
     if(pathname==="/api/dashboardx/optima/v1/overview")
       return send(res,200,optimaV1.overview(db,meta),headers);
     const requestUrl=new URL(req.url,"http://localhost");
