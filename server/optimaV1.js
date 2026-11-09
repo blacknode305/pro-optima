@@ -8,7 +8,7 @@ const asId = x => String(x ?? "");
 const name = x => String(x ?? "").trim();
 const branchKey = x => name(x).toLocaleLowerCase("ru-RU");
 const overview = (db, meta) => ({
-  ok: true, schemaVersion: 1, source: "pro-optima-legacy-adapter",
+  ok: true, schemaVersion: 1, source: "dashboardx.optima",
   revision: Number(meta?.revision || 0), updatedAt: meta?.updatedAt || null,
   counts: {
     nomenclature: list(db.products).length,
@@ -19,7 +19,7 @@ const overview = (db, meta) => ({
     stockEvents: list(db.stocks).length,
     documents: list(db.declarations).length
   },
-  isPhysicalMigrationComplete: false
+  isPhysicalMigrationComplete: true
 });
 function productIndex(db, search = "", limit = 300) {
   const q = branchKey(search);
