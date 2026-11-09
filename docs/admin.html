@@ -3229,6 +3229,7 @@ function importAll(event){
 const API_BASE=String(window.PRO_OPTIMA_CONFIG?.API_BASE||"https://pro-optima-production.up.railway.app").replace(/\/+$/,"");
 const ADMIN_TOKEN_KEY="proOptimaAdminToken_v1";
 let adminAccessWritePassword="";
+let REMOTE_SYNC_CONFLICT=false;
 function adminToken(){return localStorage.getItem(ADMIN_TOKEN_KEY)||""}
 function remoteState(text,kind=""){
   const el=document.getElementById("remoteState");if(!el)return;
@@ -3276,31 +3277,30 @@ function currentRemoteValue(key){
   return undefined;
 }
 async function flushRemote(){
-  if(remoteSaving||!REMOTE_READY||!remotePending.size)return;
+  if(remoteSaving||!REMOTE_READY||!remotePending.size||REMOTE_SYNC_CONFLICT)return;
   if(!adminToken()){remoteState("изменения локально · нужен ключ","bad");return}
   remoteSaving=true;
   const keys=[...remotePending];keys.forEach(k=>remotePending.delete(k));
   const changes={};keys.forEach(k=>changes[k]=structuredClone(currentRemoteValue(k)));
   remoteState("сохранение...");
   try{
-    if(keys.includes("history")||keys.includes("stocks")){
-      const fresh=await remoteFetch("/api/db");
-      REMOTE_REVISION=fresh.revision;
-      const mergeById=(serverRows,localRows)=>{
-        const map=new Map((Array.isArray(serverRows)?serverRows:[]).map(x=>[String(x.id||""),structuredClone(x)]));
-        (Array.isArray(localRows)?localRows:[]).forEach(x=>map.set(String(x.id||""),structuredClone(x)));
-        return [...map.values()];
-      };
-      if(keys.includes("history"))changes.history=mergeById(fresh.data?.history,orderHistory);
-      if(keys.includes("stocks"))changes.stocks=mergeById(fresh.data?.stocks,stockHistory);
-    }
-    const out=await remoteFetch("/api/admin/db",{method:"PATCH",body:JSON.stringify({baseRevision:null,changes})});
+    // Never merge stale, locally cached rows over newer server records.
+    // If another client wrote meanwhile, stop and ask the admin to reload.
+    if(!Number.isSafeInteger(Number(REMOTE_REVISION)))
+      throw Object.assign(new Error("Загрузите свежую базу перед сохранением."),{status:409});
+    const out=await remoteFetch("/api/dashboardx/optima/v1/state",{
+      method:"PATCH",body:JSON.stringify({baseRevision:Number(REMOTE_REVISION),changes})
+    });
     REMOTE_REVISION=out.revision;remoteState(`Railway · rev ${REMOTE_REVISION}`,"ok");
   }catch(e){
     keys.forEach(k=>remotePending.add(k));
-    if(e.status===409)remoteState("конфликт версии · обновите базу","bad");else remoteState("ошибка сохранения","bad");
+    if(e.status===409){
+      remoteState("конфликт версии · обновите базу, прежде чем сохранять повторно","bad");
+      // Preserve unsent local changes for review; never retry a conflict in a loop.
+      REMOTE_SYNC_CONFLICT=true;
+    }else remoteState("ошибка сохранения · повторить после проверки соединения","bad");
     console.error(e);
-  }finally{remoteSaving=false;if(remotePending.size&&adminToken())setTimeout(flushRemote,800)}
+  }finally{remoteSaving=false;if(remotePending.size&&adminToken()&&!REMOTE_SYNC_CONFLICT)setTimeout(flushRemote,800)}
 }
 function cacheRemoteLocally(){
   localStorage.setItem(SUPPLIER_KEY,JSON.stringify(db));
@@ -3323,7 +3323,7 @@ async function reloadRemote(){
   remoteState("загрузка...");
   try{
     const out=await remoteFetch("/api/db");
-    REMOTE_READY=false;hydrateRemote(out.data||{});REMOTE_REVISION=out.revision;REMOTE_READY=true;
+    REMOTE_READY=false;hydrateRemote(out.data||{});REMOTE_REVISION=out.revision;REMOTE_SYNC_CONFLICT=false;REMOTE_READY=true;
     remotePending.clear();remoteState(`Railway · rev ${REMOTE_REVISION}`,"ok");
     refreshEverything();
     if(location.hash==="#settings")loadAdminPanels();
