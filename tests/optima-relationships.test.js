@@ -59,7 +59,7 @@ test('receipts reject wrong supplier and require a real invoice', () => {
  assert.throws(()=>applyRelation(db,'receiptLots','upsert',{
   catalogItemId:'c1',supplierId:'s2',branch:'Лободы',invoiceNumber:'R-5',
   receivedAt:'2026-11-09',unit:'кор',quantity:2
- }),/не принадлежит/);
+ }),/поставщику товара/);
  assert.throws(()=>applyRelation(db,'receiptLots','upsert',{
   catalogItemId:'c1',supplierId:'s1',branch:'Лободы',
   receivedAt:'2026-11-09',unit:'кор',quantity:2
