@@ -951,6 +951,10 @@ async function api(req,res,pathname){
   }
 
   if(!adminOk(req))return send(res,401,{error:"Неверный или отсутствующий Admin token."},cors);
+  // Every privileged PRO OPTIMA mutation must be validated on the server:
+  // token alone grants read access, never write access.
+  if(!["GET","HEAD","OPTIONS"].includes(req.method) && !adminWriteOk(req))
+    return send(res,403,{error:"Для изменения данных нужен пароль администратора Оптима."},cors);
 
   if(pathname==="/api/dashboardx/branches"&&req.method==="GET"){
     const {db,meta}=loadState();
