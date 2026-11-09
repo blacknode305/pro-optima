@@ -17,7 +17,8 @@ test('versioned optima overview derives from a single legacy source', () => {
  const summary=overview(db,{revision:14,updatedAt:'2026-11-09'});
  assert.equal(summary.counts.nomenclature,1);
  assert.equal(summary.counts.documents,1);
- assert.equal(summary.isPhysicalMigrationComplete,false);
+ assert.equal(summary.isPhysicalMigrationComplete,true);
+ assert.equal(summary.source,'dashboardx.optima');
  assert.equal(productIndex(db,'му',10).products[0].id,3);
  assert.equal(productIndex(db,'вода').total,0);
 });
