@@ -1239,8 +1239,13 @@ async function api(req,res,pathname){
     // Legacy PRO OPTIMA imports must not erase the DashboardX namespace.
     if(incoming&&incoming.dashboardx===undefined)incoming.dashboardx=clone(loadState().db.dashboardx);
     if(incoming&&incoming.branches===undefined&&Array.isArray(loadState().db.branches))incoming.branches=clone(loadState().db.branches);
-    // Legacy imports must never replace the separately managed document archive.
-    if(incoming)incoming.declarations=clone(loadState().db.declarations);
+    // Legacy imports must never replace separately managed documents or
+    // verified relations/price audit/receipts added under dashboardx.optima.
+    if(incoming){
+      const protectedState=loadState().db;
+      incoming.declarations=clone(protectedState.declarations);
+      for(const key of dashboardxStore.NEW_COLLECTIONS)incoming[key]=clone(protectedState[key]);
+    }
     try{validateDb(incoming)}catch(e){return send(res,400,{error:e.message},cors)}
     const ids=new Set(incoming.suppliers.map(s=>String(s.id)));
     if(incoming.declarations.some(d=>!ids.has(String(d.supplierId))))
