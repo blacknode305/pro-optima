@@ -54,7 +54,7 @@
     if(loading||typeof window.remoteFetch!=="function")return;
     loading=true;
     try{
-      const out=await window.remoteFetch("/api/db",{admin:false});
+      const out=await window.remoteFetch("/api/db");
       units=fromSettings(out.data?.settings||{});
       publish();
       render();

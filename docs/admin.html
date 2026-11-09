@@ -3228,6 +3228,7 @@ function importAll(event){
 /* ===== PRO OPTIMA Railway bridge ===== */
 const API_BASE=String(window.PRO_OPTIMA_CONFIG?.API_BASE||"https://pro-optima-production.up.railway.app").replace(/\/+$/,"");
 const ADMIN_TOKEN_KEY="proOptimaAdminToken_v1";
+let adminAccessWritePassword="";
 function adminToken(){return localStorage.getItem(ADMIN_TOKEN_KEY)||""}
 function remoteState(text,kind=""){
   const el=document.getElementById("remoteState");if(!el)return;
@@ -3247,7 +3248,15 @@ function setAdminTokenPrompt(){
 async function remoteFetch(path,opts={}){
   const headers={"Content-Type":"application/json",...(opts.headers||{})};
   if(opts.admin!==false&&adminToken())headers.Authorization="Bearer "+adminToken();
+  const isMutation=!["GET","HEAD","OPTIONS"].includes(String(opts.method||"GET").toUpperCase());
+  if(isMutation){
+    if(!adminAccessWritePassword)
+      adminAccessWritePassword=prompt("Введите пароль администратора Оптима для сохранения изменений","")||"";
+    if(!adminAccessWritePassword)throw new Error("Пароль администратора не введён.");
+    headers["X-Optima-Write-Password"]=adminAccessWritePassword;
+  }
   const r=await fetch(API_BASE+path,{...opts,headers});
+  if(isMutation&&r.status===403)adminAccessWritePassword="";
   let data={};try{data=await r.json()}catch{}
   if(!r.ok)throw Object.assign(new Error(data.error||`HTTP ${r.status}`),{status:r.status,data});
   return data;
@@ -3274,7 +3283,7 @@ async function flushRemote(){
   remoteState("сохранение...");
   try{
     if(keys.includes("history")||keys.includes("stocks")){
-      const fresh=await remoteFetch("/api/db",{admin:false});
+      const fresh=await remoteFetch("/api/db");
       REMOTE_REVISION=fresh.revision;
       const mergeById=(serverRows,localRows)=>{
         const map=new Map((Array.isArray(serverRows)?serverRows:[]).map(x=>[String(x.id||""),structuredClone(x)]));
@@ -3312,7 +3321,7 @@ function hydrateRemote(data){
 async function reloadRemote(){
   remoteState("загрузка...");
   try{
-    const out=await remoteFetch("/api/db",{admin:false});
+    const out=await remoteFetch("/api/db");
     REMOTE_READY=false;hydrateRemote(out.data||{});REMOTE_REVISION=out.revision;REMOTE_READY=true;
     remotePending.clear();remoteState(`Railway · rev ${REMOTE_REVISION}`,"ok");
     refreshEverything();

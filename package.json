@@ -5,7 +5,7 @@
   "description": "PRO OPTIMA monorepo: Railway API + GitHub Pages client",
   "scripts": {
     "start": "npm --prefix server start",
-    "check": "npm --prefix server run check"
+    "check": "npm --prefix server run check && node --test tests/*.test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

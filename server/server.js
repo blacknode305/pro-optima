@@ -8,6 +8,7 @@ const crypto = require("crypto");
 const { URL } = require("url");
 const branchRegistry = require("./branchRegistry.js");
 const declarationStore = require("./declarationStore.js");
+const optimaV1 = require("./optimaV1.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -23,6 +24,15 @@ const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const MAX_BODY = Number(process.env.SOPTIMA_MAX_BODY || 30 * 1024 * 1024);
 const ADMIN_TOKEN = String(process.env.SOPTIMA_ADMIN_TOKEN || "").trim() || crypto.randomBytes(24).toString("hex");
+// Prefer a precomputed SHA-256 hex digest supplied as a Railway secret. During
+// transition, derive the digest from the existing SOPTIMA_WRITE_PASSWORD secret
+// at startup; never persist the raw password in a file or send it to the browser.
+const configuredWriteDigest = String(process.env.SOPTIMA_WRITE_PASSWORD_HASH || "").trim();
+const ADMIN_WRITE_PASSWORD_DIGEST = /^[a-f0-9]{64}$/i.test(configuredWriteDigest)
+  ? Buffer.from(configuredWriteDigest, "hex")
+  : process.env.SOPTIMA_WRITE_PASSWORD
+    ? crypto.createHash("sha256").update(String(process.env.SOPTIMA_WRITE_PASSWORD)).digest()
+    : null;
 const SESSION_SECRET = String(process.env.SOPTIMA_SESSION_SECRET || "").trim() ||
   crypto.createHash("sha256").update(ADMIN_TOKEN + ":operator-sessions").digest("hex");
 const ALLOWED_ORIGINS = String(process.env.SOPTIMA_ALLOWED_ORIGINS || "*")
@@ -183,6 +193,12 @@ function adminOk(req){
   const auth=String(req.headers.authorization||"");
   const token=auth.startsWith("Bearer ")?auth.slice(7):String(req.headers["x-admin-token"]||"");
   return !!token && timingSafeEqualText(token,ADMIN_TOKEN);
+}
+function adminWriteOk(req) {
+  const supplied = String(req.headers["x-optima-write-password"] || "");
+  if (!ADMIN_WRITE_PASSWORD_DIGEST || !supplied || supplied.length > 1024) return false;
+  const suppliedDigest = crypto.createHash("sha256").update(supplied).digest();
+  return crypto.timingSafeEqual(suppliedDigest, ADMIN_WRITE_PASSWORD_DIGEST);
 }
 function hashPin(pin,salt){
   return crypto.pbkdf2Sync(String(pin),salt,120000,32,"sha256").toString("hex");
@@ -654,6 +670,30 @@ async function api(req,res,pathname){
 
 
 
+  // Versioned Optima namespace: read-only, derived from the existing Railway DB.
+  if(pathname.startsWith("/api/dashboardx/optima/v1/")){
+    if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен."},cors);
+    if(req.method!=="GET")return send(res,405,{error:"Read-only API."},cors);
+    const {db,meta}=loadState();
+    const headers={...cors,"Cache-Control":"private, no-store"};
+    if(pathname==="/api/dashboardx/optima/v1/overview")
+      return send(res,200,optimaV1.overview(db,meta),headers);
+    const requestUrl=new URL(req.url,"http://localhost");
+    if(pathname==="/api/dashboardx/optima/v1/products"){
+      const index=optimaV1.productIndex(db,requestUrl.searchParams.get("q")||"",
+        requestUrl.searchParams.get("limit")||300);
+      return send(res,200,{ok:true,schemaVersion:1,revision:meta.revision,...index},headers);
+    }
+    if(pathname==="/api/dashboardx/optima/v1/passport"){
+      const productId=requestUrl.searchParams.get("productId");
+      if(!productId)return send(res,400,{error:"productId обязателен."},headers);
+      const passport=optimaV1.passport(db,productId);
+      if(!passport)return send(res,404,{error:"Наименование не найдено."},headers);
+      return send(res,200,{ok:true,revision:meta.revision,...passport},headers);
+    }
+    return send(res,404,{error:"Unknown Optima v1 endpoint."},headers);
+  }
+
   // Private English learning data owned by DashboardX, not by production orders.
   // No unauthenticated endpoint returns translations, vocabulary, or progress.
   // A dedicated revision prevents silent overwrites from multiple devices.
@@ -777,6 +817,7 @@ async function api(req,res,pathname){
     return send(res,200,{ok:true,service:"pro-optima-node-v23",revision:meta.revision,updatedAt:meta.updatedAt},cors);
   }
   if(pathname==="/api/db"&&req.method==="GET"){
+    if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен для чтения базы."},cors);
     const {db,meta}=loadState();
     // DashboardX translations and personal vocabulary are private to the authenticated API.
     const publicDb={...db,dashboardx:{...db.dashboardx}};
@@ -935,6 +976,10 @@ async function api(req,res,pathname){
   }
 
   if(!adminOk(req))return send(res,401,{error:"Неверный или отсутствующий Admin token."},cors);
+  // Every privileged PRO OPTIMA mutation must be validated on the server:
+  // token alone grants read access, never write access.
+  if(!["GET","HEAD","OPTIONS"].includes(req.method) && !adminWriteOk(req))
+    return send(res,403,{error:"Для изменения данных нужен пароль администратора Оптима."},cors);
 
   if(pathname==="/api/dashboardx/branches"&&req.method==="GET"){
     const {db,meta}=loadState();
@@ -1189,9 +1234,10 @@ async function api(req,res,pathname){
   if(pathname==="/api/admin/access"&&req.method==="GET"){
     const {db}=loadState(),access=loadAccess();
     const rows=branchesFromDb(db).map(branch=>({branch,configured:!!branchAccessRecord(access,branch),updatedAt:branchAccessRecord(access,branch)?.updatedAt||null}));
-    return send(res,200,{ok:true,branches:rows},cors);
+    return send(res,200,{ok:true,passwordRequiredForPins:true,branches:rows},cors);
   }
   if(pathname==="/api/admin/access"&&req.method==="PUT"){
+    if(!adminWriteOk(req))return send(res,403,{error:"Для смены пароля производства требуется Admin Token и пароль администратора."},cors);
     const body=await readBody(req);
     const branch=canonicalBranch(body.branch),pin=String(body.pin||"");
     const {db}=loadState();

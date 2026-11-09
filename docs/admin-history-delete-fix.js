@@ -32,7 +32,7 @@
       await settlePendingHistory();
 
       for(let attempt=0;attempt<2;attempt++){
-        const fresh=await remoteFetch("/api/db",{admin:false});
+        const fresh=await remoteFetch("/api/db");
         const serverHistory=Array.isArray(fresh.data?.history)?fresh.data.history:[];
         const next=serverHistory.filter(row=>String(row?.id||"")!==targetId);
 

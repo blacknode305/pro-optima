@@ -117,4 +117,9 @@ fs.renameSync=function(src,dst){
   return out;
 };
 
+// Fail closed if the pre-migration snapshot cannot be created or verified.
+// This happens before the HTTP listener starts and before any DB schema change.
+const { createMigrationBackup } = require("./migrationBackup.js");
+const snapshot = createMigrationBackup(DATA_DIR);
+console.log("[PRO OPTIMA] Pre-migration snapshot", snapshot.created ? "created" : "verified", "files:", snapshot.count);
 require("./server.js");
