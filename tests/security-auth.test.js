@@ -47,6 +47,12 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal(ready, true, 'server is ready');
     assert.equal((await req('/api/db')).status, 401, 'no public DB read');
     assert.equal((await req('/api/db', { headers })).status, 200, 'admin token grants read');
+    assert.equal((await req('/api/dashboardx/optima/v1/overview')).status, 401, 'Optima namespace is private');
+    const overview = await (await req('/api/dashboardx/optima/v1/overview', { headers })).json();
+    assert.equal(overview.schemaVersion, 1);
+    assert.equal(overview.isPhysicalMigrationComplete, false);
+    assert.equal((await req('/api/dashboardx/optima/v1/products', { headers })).status, 200);
+    assert.equal((await req('/api/dashboardx/optima/v1/passport?productId=not-found', { headers })).status, 404);
     assert.equal((await req('/api/admin/access')).status, 401);
     const access = await (await req('/api/admin/access', { headers })).json();
     assert.equal(access.passwordRequiredForPins, true);
