@@ -4,6 +4,7 @@ const crypto=require("crypto");
 
 const PORT=Number(process.env.PORT||8787);
 const ADMIN_TOKEN=String(process.env.SOPTIMA_ADMIN_TOKEN||"").trim();
+const WRITE_PASSWORD=String(process.env.SOPTIMA_WRITE_PASSWORD||"");
 const DAYS=["Воскресенье","Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
 const DAY_MAP=new Map(DAYS.map((x,i)=>[x.toLocaleLowerCase("ru-RU"),i]));
 const normalize=s=>String(s??"").trim().toLocaleLowerCase("ru-RU");
@@ -114,7 +115,7 @@ async function adminDb(){
   return internal("/api/admin/db",{headers:{Authorization:`Bearer ${ADMIN_TOKEN}`}});
 }
 async function patchAdminDb(baseRevision,changes){
-  return internal("/api/admin/db",{method:"PATCH",headers:{Authorization:`Bearer ${ADMIN_TOKEN}`},body:JSON.stringify({baseRevision,changes})});
+  return internal("/api/admin/db",{method:"PATCH",headers:{Authorization:`Bearer ${ADMIN_TOKEN}`,"X-Optima-Write-Password":WRITE_PASSWORD},body:JSON.stringify({baseRevision,changes})});
 }
 
 async function handleExtraApi(req,res){
