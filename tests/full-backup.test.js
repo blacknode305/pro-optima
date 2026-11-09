@@ -28,7 +28,12 @@ test('complete backup streams canonical DB, metadata, access and all photo bytes
   const dir=mkdtempSync(join(tmpdir(),'optima-complete-export-'));
   try{
     mkdirSync(join(dir,'declaration-files'));
-    writeFileSync(join(dir,'dashboardx.json'),'{"dashboardx":{"optima":{"products":[{"id":1}]}}}');
+    const globalDb={format:'dashboardx-global-v1',schemaVersion:1,dashboardx:{
+      optima:{suppliers:[],products:[{id:1}]},
+      media:{radioStations:[{id:'fm1',name:'FM',url:'https://radio.example/stream'}]},
+      learning:{english:{level:'A1'}}
+    }};
+    writeFileSync(join(dir,'dashboardx.json'),JSON.stringify(globalDb));
     writeFileSync(join(dir,'meta.json'),'{"revision":634}');
     writeFileSync(join(dir,'access.json'),'{"branches":{"test":{"pinHash":"scrypt"}}}');
     const sample=Buffer.alloc(10001,127);
@@ -37,6 +42,8 @@ test('complete backup streams canonical DB, metadata, access and all photo bytes
     const all=unpack(gunzipSync(Buffer.concat(parts)));
     assert.deepEqual(Object.keys(all),['dashboardx.json','meta.json','access.json','declaration-files/photo-1.jpg','manifest.json']);
     assert.deepEqual(all['declaration-files/photo-1.jpg'],sample);
+    assert.deepEqual(JSON.parse(all['dashboardx.json'].toString('utf8')),globalDb,
+      'canonical OPTIMA, radio and DashboardX data must remain together in one JSON');
     const manifest=JSON.parse(all['manifest.json'].toString('utf8'));
     assert.equal(manifest.revision,634);
     for(const record of manifest.files){

@@ -1301,6 +1301,9 @@ async function api(req,res,pathname){
       return send(res,500,{error:"Не удалось подготовить полный архив."},cors)}
     const filename="DashboardX_OPTIMA_complete_"+dateInAlmaty()+"_rev-"+meta.revision+".tar.gz";
     res.writeHead(200,{...cors,
+      "Access-Control-Expose-Headers":"Content-Disposition, X-DashboardX-Backup-Format, X-DashboardX-Backup-Revision",
+      "X-DashboardX-Backup-Format":"dashboardx-optima-complete-backup-v1",
+      "X-DashboardX-Backup-Revision":String(meta.revision),
       "Content-Type":"application/gzip",
       "Content-Disposition":'attachment; filename="'+filename+'"',
       "Cache-Control":"private, no-store",
