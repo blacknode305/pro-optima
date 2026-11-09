@@ -11,6 +11,7 @@ const declarationStore = require("./declarationStore.js");
 const optimaV1 = require("./optimaV1.js");
 const dashboardxStore = require("./dashboardxStore.js");
 const optimaRelationships = require("./optimaRelationships.js");
+const {createFullBackupStream} = require("./fullBackup.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -1289,6 +1290,26 @@ async function api(req,res,pathname){
       const nextMeta=commitDb(incoming,current,meta);
       return send(res,200,{ok:true,revision:nextMeta.revision,updatedAt:nextMeta.updatedAt},cors);
     });
+  }
+  if(pathname==="/api/admin/backup/full"&&req.method==="GET"){
+    // Both Admin Token and administrator password are verified above.
+    // Archive includes branch PIN hashes: store the download securely.
+    const {meta}=loadState();
+    let archive;
+    try{archive=createFullBackupStream(DATA_DIR,meta.revision)}
+    catch(error){console.error("[SOPTIMA] Full export failed",error.message);
+      return send(res,500,{error:"Не удалось подготовить полный архив."},cors)}
+    const filename="DashboardX_OPTIMA_complete_"+dateInAlmaty()+"_rev-"+meta.revision+".tar.gz";
+    res.writeHead(200,{...cors,
+      "Content-Type":"application/gzip",
+      "Content-Disposition":'attachment; filename="'+filename+'"',
+      "Cache-Control":"private, no-store",
+      "X-Content-Type-Options":"nosniff",
+      "Referrer-Policy":"no-referrer"});
+    archive.on("error",error=>{console.error("[SOPTIMA] Archive streaming error",error.message);res.destroy(error)});
+    res.on("close",()=>archive.destroy());
+    archive.pipe(res);
+    return;
   }
   if(pathname==="/api/admin/export"&&req.method==="GET"){
     const {db}=loadState();
