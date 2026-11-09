@@ -1250,8 +1250,9 @@ async function api(req,res,pathname){
     const body=await readBody(req);
     return enqueueWrite(async()=>{
       const state=loadState(),current=clone(state.db),db=state.db,meta=state.meta;
-      if(body.baseRevision!==undefined&&body.baseRevision!==null&&Number(body.baseRevision)!==Number(meta.revision)){
-        return send(res,409,{error:"Конфликт версии. Сначала загрузите свежую базу.",revision:meta.revision,updatedAt:meta.updatedAt},cors);
+      // Legacy clients must not bypass optimistic concurrency control.
+      if(!Number.isSafeInteger(body.baseRevision)||body.baseRevision!==Number(meta.revision)){
+        return send(res,409,{error:"Необходима актуальная ревизия базы. Обновите данные.",revision:meta.revision,updatedAt:meta.updatedAt},cors);
       }
       if(!body.changes||typeof body.changes!=="object"||Array.isArray(body.changes))return send(res,400,{error:"changes должен быть объектом."},cors);
       if(Object.hasOwn(body.changes,"declarations"))return send(res,400,{error:"Изменения документов доступны только через специальный API."},cors);
