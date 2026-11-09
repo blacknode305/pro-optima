@@ -34,10 +34,21 @@ function productIndex(db, search = "", limit = 300) {
 function passport(db, productId) {
   const product = list(db.products).find(x => asId(x.id) === asId(productId));
   if (!product) return null;
-  const catalogIds = new Set(list(product.catalogLinks).map(asId));
-  const catalog = list(db.supplierCatalog).filter(x =>
+  const linkedIds = new Set(list(product.catalogLinks).map(asId));
+  const baseCatalog = list(db.supplierCatalog).filter(x =>
     (x.usedProductId !== undefined && asId(x.usedProductId) === asId(product.id)) ||
-    catalogIds.has(asId(x.id)));
+    linkedIds.has(asId(x.id)));
+  for(const x of baseCatalog)linkedIds.add(asId(x.id));
+  const conversions = list(db.packageConversions)
+    .filter(x => !x.archivedAt && x.verifiedAt && linkedIds.has(asId(x.catalogItemId)));
+  const byConversion = new Map(conversions.map(x => [asId(x.catalogItemId),x]));
+  const catalog = baseCatalog.map(x => {
+    const conversion=byConversion.get(asId(x.id));
+    const price=x.price===null||x.price===undefined||x.price===""?null:Number(x.price);
+    const basePrice=conversion&&Number.isFinite(price)&&conversion.unitsPerPurchase>0
+      ? Number((price/conversion.unitsPerPurchase).toFixed(3)):null;
+    return {...x,comparableUnitPrice:basePrice,comparableBaseUnit:conversion?.baseUnit||null};
+  });
   const offers = list(db.offers).filter(x => asId(x.productId) === asId(product.id));
   const supplierIds = new Set([
     ...catalog.map(x => asId(x.supplierId)),
@@ -52,13 +63,28 @@ function passport(db, productId) {
   const supplierDocuments = list(db.declarations)
     .filter(x => supplierIds.has(asId(x.supplierId)))
     .map(x => ({ ...x, productCoverage: "unverified", matchBasis: "supplier-only" }));
+  const docsById = new Map(list(db.declarations).map(x=>[asId(x.id),x]));
+  const confirmedDocuments = list(db.documentCoverage)
+    .filter(x => !x.archivedAt && x.reviewStatus==="confirmed" &&
+      linkedIds.has(asId(x.catalogItemId)) && docsById.has(asId(x.documentId)))
+    .map(x=>({ ...x, document:docsById.get(asId(x.documentId)),
+      matchBasis:"human-verified-evidence", productCoverage:"confirmed" }));
+  const pendingDocumentLinks = list(db.documentCoverage)
+    .filter(x => !x.archivedAt && x.reviewStatus!=="confirmed" && linkedIds.has(asId(x.catalogItemId)));
+  const supplierProductEvidence = list(db.supplierProductEvidence)
+    .filter(x => !x.archivedAt && linkedIds.has(asId(x.catalogItemId)));
+  const receiptLots = list(db.receiptLots).filter(x=>!x.archivedAt &&
+    (asId(x.productId)===asId(product.id)||linkedIds.has(asId(x.catalogItemId))));
+  const priceHistory = list(db.priceHistory).filter(x =>
+    asId(x.productId)===asId(product.id)||linkedIds.has(asId(x.catalogItemId)));
   return {
-    schemaVersion:1, product, suppliers, catalog, offers,
-    stockEvents, orders, supplierDocuments,
-    priceHistory: [], priceHistoryComplete: false,
+    schemaVersion:1, product, suppliers, catalog, offers, conversions,
+    stockEvents, orders, supplierDocuments, confirmedDocuments,
+    pendingDocumentLinks, supplierProductEvidence, receiptLots,
+    priceHistory, priceHistoryComplete:false,
     warnings: {
-      documents: "Document coverage of a specific product is not verified by supplierId alone.",
-      prices: "Supplier price units may differ: package conversion is not inferred.",
+      documents: "Only human-verified documentCoverage establishes a document-to-catalog link; legal sufficiency must still be checked.",
+      prices: "Price-per-base-unit is only computed using recorded verified packaging conversions.",
       stocks: "Legacy stock records may not include supplier or invoice provenance."
     }
   };
