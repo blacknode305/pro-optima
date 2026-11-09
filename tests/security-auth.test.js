@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 
-const root = fileURLToPath(new URL('../server/server.js', import.meta.url));
+const root = fileURLToPath(new URL('../server/start.js', import.meta.url));
 const listenPort = () => new Promise((resolve, reject) => {
   const socket = net.createServer();
   socket.once('error', reject);
