@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,12 +45,24 @@ test('shared database is private and branch PIN writes require admin token plus 
       await sleep(75);
     }
     assert.equal(ready, true, 'server is ready');
+    const canonical = JSON.parse(readFileSync(join(dir, 'dashboardx.json'), 'utf8'));
+    assert.equal(canonical.format, 'dashboardx-global-v1');
+    assert.deepEqual(Object.keys(canonical).sort(), ['dashboardx', 'format', 'schemaVersion']);
+    assert.deepEqual(canonical.dashboardx.optima.suppliers, []);
+    assert.ok(canonical.dashboardx.optima.priceHistory);
+    assert.equal(readFileSync(join(dir, 'database.json'), 'utf8').includes('"dashboardx"'), false,
+      'original legacy database is unchanged during migration');
     assert.equal((await req('/api/db')).status, 401, 'no public DB read');
     assert.equal((await req('/api/db', { headers })).status, 200, 'admin token grants read');
     assert.equal((await req('/api/dashboardx/optima/v1/overview')).status, 401, 'Optima namespace is private');
     const overview = await (await req('/api/dashboardx/optima/v1/overview', { headers })).json();
     assert.equal(overview.schemaVersion, 1);
-    assert.equal(overview.isPhysicalMigrationComplete, false);
+    assert.equal(overview.isPhysicalMigrationComplete, true);
+    assert.equal(overview.source, 'dashboardx.optima');
+    const globalState = await (await req('/api/dashboardx/optima/v1/state', { headers })).json();
+    assert.equal(globalState.source, 'dashboardx.optima');
+    assert.ok(globalState.data.priceHistory);
+    assert.equal('learning' in globalState.data, false);
     assert.equal((await req('/api/dashboardx/optima/v1/products', { headers })).status, 200);
     assert.equal((await req('/api/dashboardx/optima/v1/passport?productId=not-found', { headers })).status, 404);
     assert.equal((await req('/api/admin/access')).status, 401);
@@ -74,6 +86,21 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal((await mutation({})).status, 403, 'admin token alone cannot update the DB');
     assert.equal((await mutation({ 'X-Optima-Write-Password': 'bad' })).status, 403);
     assert.equal((await mutation({ 'X-Optima-Write-Password': password })).status, 200);
+    const stateBefore = await (await req('/api/dashboardx/optima/v1/state', { headers })).json();
+    const statePatch = additional => req('/api/dashboardx/optima/v1/state', {
+      method:'PATCH', headers: { ...headers, ...additional },
+      body: JSON.stringify({ baseRevision: stateBefore.revision, changes: {
+        products: [{ id: 55, name: 'Молоко', unit: 'ящ' }]
+      } })
+    });
+    assert.equal((await statePatch({})).status, 403);
+    assert.equal((await statePatch({ 'X-Optima-Write-Password': password })).status, 200);
+    const stored = JSON.parse(readFileSync(join(dir, 'dashboardx.json'), 'utf8'));
+    assert.equal(stored.dashboardx.optima.products[0].id, 55);
+    assert.equal(stored.dashboardx.optima.settings.testWriteGuard, true);
+    assert.equal('products' in stored, false);
+    assert.ok(readFileSync(join(dir, 'database.json'), 'utf8').includes('"products":[]'));
+    assert.equal((await req('/api/admin/db', { headers })).status, 200);
     assert.equal((await req('/api/admin/dispatcher-access', {
       method: 'PUT', headers, body: JSON.stringify({ pin: '5824' })
     })).status, 403, 'dispatcher PIN is protected');
