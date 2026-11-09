@@ -54,6 +54,14 @@ test('shared database is private and branch PIN writes require admin token plus 
     assert.equal(readFileSync(join(dir, 'database.json'), 'utf8').includes('"dashboardx"'), false,
       'original legacy database is unchanged during migration');
     assert.equal((await req('/api/db')).status, 401, 'no public DB read');
+    assert.equal((await req('/api/admin/backup/full')).status, 401, 'no guest backup download');
+    assert.equal((await req('/api/admin/backup/full', {headers})).status, 403,
+      'admin token alone cannot download full backup');
+    const fullArchive = await req('/api/admin/backup/full', {headers: authorized});
+    assert.equal(fullArchive.status, 200);
+    assert.match(fullArchive.headers.get('content-type')||'',/application\/gzip/);
+    assert.ok((await fullArchive.arrayBuffer()).byteLength>512);
+
     assert.equal((await req('/api/db', { headers })).status, 403, 'token alone cannot read');
     assert.equal((await req('/api/db', { headers: authorized })).status, 200, 'both factors grant read');
     assert.equal((await req('/api/dashboardx/optima/v1/overview')).status, 401, 'Optima namespace is private');
