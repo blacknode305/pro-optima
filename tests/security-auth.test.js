@@ -60,6 +60,37 @@ test('shared database is private and branch PIN writes require admin token plus 
     const after = await (await req('/api/admin/access', { headers })).json();
     assert.equal(after.branches[0].configured, true);
     assert.equal(JSON.stringify(after).includes('9142'), false, 'never expose PIN value');
+    const base = await (await req('/api/admin/db', { headers })).json();
+    const mutation = added => req('/api/admin/db', {
+      method: 'PATCH', headers: { ...headers, ...added },
+      body: JSON.stringify({ baseRevision: base.revision, changes: { settings: { testWriteGuard: true } } })
+    });
+    assert.equal((await mutation({})).status, 403, 'admin token alone cannot update the DB');
+    assert.equal((await mutation({ 'X-Optima-Write-Password': 'bad' })).status, 403);
+    assert.equal((await mutation({ 'X-Optima-Write-Password': password })).status, 200);
+    assert.equal((await req('/api/admin/dispatcher-access', {
+      method: 'PUT', headers, body: JSON.stringify({ pin: '5824' })
+    })).status, 403, 'dispatcher PIN is protected');
+    assert.equal((await req('/api/admin/dispatcher-access', {
+      method: 'PUT', headers: { ...headers, 'X-Optima-Write-Password': password },
+      body: JSON.stringify({ pin: '5824' })
+    })).status, 200);
+    const dispatcherLogin = await (await req('/api/dispatcher/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '5824' })
+    })).json();
+    assert.ok(dispatcherLogin.token, 'dispatcher still authenticates with own PIN');
+    assert.equal((await req('/api/dispatcher/bootstrap', {
+      headers: { Authorization: 'Bearer ' + dispatcherLogin.token }
+    })).status, 200);
+    const operator = await (await req('/api/operator/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: 'Горняк', pin: '9142' })
+    })).json();
+    assert.ok(operator.token, 'production login remains operational');
+    assert.equal((await req('/api/operator/bootstrap', {
+      headers: { Authorization: 'Bearer ' + operator.token }
+    })).status, 200);
   } finally {
     child.kill('SIGTERM');
     rmSync(dir, { recursive: true, force: true });
