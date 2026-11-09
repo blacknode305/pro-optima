@@ -8,6 +8,7 @@ const crypto = require("crypto");
 const { URL } = require("url");
 const branchRegistry = require("./branchRegistry.js");
 const declarationStore = require("./declarationStore.js");
+const optimaV1 = require("./optimaV1.js");
 
 const ROOT = __dirname;
 const DATA_DIR = process.env.SOPTIMA_DATA_DIR || "/var/data";
@@ -668,6 +669,30 @@ async function api(req,res,pathname){
   if(req.method==="OPTIONS")return send(res,204,"",cors);
 
 
+
+  // Versioned Optima namespace: read-only, derived from the existing Railway DB.
+  if(pathname.startsWith("/api/dashboardx/optima/v1/")){
+    if(!adminOk(req))return send(res,401,{error:"Admin Token обязателен."},cors);
+    if(req.method!=="GET")return send(res,405,{error:"Read-only API."},cors);
+    const {db,meta}=loadState();
+    const headers={...cors,"Cache-Control":"private, no-store"};
+    if(pathname==="/api/dashboardx/optima/v1/overview")
+      return send(res,200,optimaV1.overview(db,meta),headers);
+    const requestUrl=new URL(req.url,"http://localhost");
+    if(pathname==="/api/dashboardx/optima/v1/products"){
+      const index=optimaV1.productIndex(db,requestUrl.searchParams.get("q")||"",
+        requestUrl.searchParams.get("limit")||300);
+      return send(res,200,{ok:true,schemaVersion:1,revision:meta.revision,...index},headers);
+    }
+    if(pathname==="/api/dashboardx/optima/v1/passport"){
+      const productId=requestUrl.searchParams.get("productId");
+      if(!productId)return send(res,400,{error:"productId обязателен."},headers);
+      const passport=optimaV1.passport(db,productId);
+      if(!passport)return send(res,404,{error:"Наименование не найдено."},headers);
+      return send(res,200,{ok:true,revision:meta.revision,...passport},headers);
+    }
+    return send(res,404,{error:"Unknown Optima v1 endpoint."},headers);
+  }
 
   // Private English learning data owned by DashboardX, not by production orders.
   // No unauthenticated endpoint returns translations, vocabulary, or progress.
